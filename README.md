@@ -1,6 +1,6 @@
 # Tracker
 
-Modular internal operations software, starting with work tracking for a launch-vehicle engineering team.
+Modular internal operations software, starting with work tracking for a engineering team.
 
 ## Workspace layout
 
