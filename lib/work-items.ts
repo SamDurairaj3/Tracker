@@ -86,7 +86,6 @@ export type WorkItemPatch = {
   };
 };
 
-export const CURRENT_ENGINEER = 'Arjun Menon';
 
 export const ENGINEERS = [
   'Arjun Menon',

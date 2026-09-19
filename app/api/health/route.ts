@@ -7,8 +7,14 @@ export async function GET() {
   try {
     // A successful connection alone is not enough: the schema must be ready.
     await database().query('SELECT 1 FROM tracker_schema_migrations LIMIT 1');
-    return Response.json({ status: 'ok' });
+    return Response.json(
+      { status: 'ok' },
+      { headers: { 'Cache-Control': 'no-store, private' } },
+    );
   } catch {
-    return Response.json({ status: 'unavailable' }, { status: 503 });
+    return Response.json(
+      { status: 'unavailable' },
+      { status: 503, headers: { 'Cache-Control': 'no-store, private' } },
+    );
   }
 }

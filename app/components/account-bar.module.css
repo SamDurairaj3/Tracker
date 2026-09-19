@@ -1,0 +1,72 @@
+.account {
+  position: fixed;
+  z-index: 60;
+  top: 14px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(390px, calc(100vw - 28px));
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(7, 23, 19, 0.92);
+  color: #f8fafc;
+  box-shadow: 0 12px 36px rgba(2, 8, 23, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #1bbf88;
+  color: #05271d;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.copy strong,
+.copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy strong { font-size: 13px; }
+.copy small { margin-top: 3px; color: #a7c7bc; font-size: 11px; }
+
+.account button {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.account button:hover { background: rgba(255, 255, 255, 0.1); }
+.account button:disabled { cursor: wait; opacity: 0.65; }
+
+@media (max-width: 720px) {
+  .account {
+    position: absolute;
+    top: 68px;
+    right: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .copy { display: none; }
+}

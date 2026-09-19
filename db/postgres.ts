@@ -76,13 +76,17 @@ export function createPostgresDatabase(pool: Pool): Database {
 // across development reloads; production owns one bounded pool per Node process.
 const state = globalThis as typeof globalThis & { trackerPostgresPool?: Pool };
 
-export function database(): Database {
+export function postgresPool(): Pool {
   if (!state.trackerPostgresPool) {
     const pool = new Pool(postgresConfig());
     pool.on('error', () => console.error('An idle PostgreSQL connection failed.'));
     state.trackerPostgresPool = pool;
   }
-  return createPostgresDatabase(state.trackerPostgresPool);
+  return state.trackerPostgresPool;
+}
+
+export function database(): Database {
+  return createPostgresDatabase(postgresPool());
 }
 
 export async function closeDatabase() {

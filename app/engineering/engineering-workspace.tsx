@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 import {
-  CURRENT_ENGINEER,
   ENGINEERS,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
@@ -44,23 +43,25 @@ type WorkItemForm = {
   checklist: ChecklistDraft[];
 };
 
-const emptyForm: WorkItemForm = {
-  title: '',
-  type: 'Task',
-  team: 'Propulsion',
-  owner: CURRENT_ENGINEER,
-  priority: 'High',
-  purpose: '',
-  expectedResult: '',
-  linkedGoal: 'Flight readiness baseline',
-  start: '2026-08-28',
-  due: '2026-09-04',
-  progressMethod: 'checklist-count',
-  checklist: [
-    { title: '', assignee: CURRENT_ENGINEER },
-    { title: '', assignee: CURRENT_ENGINEER },
-  ],
-};
+function createEmptyForm(currentUserName: string): WorkItemForm {
+  return {
+    title: '',
+    type: 'Task',
+    team: 'Propulsion',
+    owner: currentUserName,
+    priority: 'High',
+    purpose: '',
+    expectedResult: '',
+    linkedGoal: 'Flight readiness baseline',
+    start: '2026-08-28',
+    due: '2026-09-04',
+    progressMethod: 'checklist-count',
+    checklist: [
+      { title: '', assignee: currentUserName },
+      { title: '', assignee: currentUserName },
+    ],
+  };
+}
 
 const nextStatus: Partial<Record<WorkStatus, WorkStatus>> = {
   captured: 'ready',
@@ -89,16 +90,28 @@ function dueTone(item: WorkItem) {
   return `Due ${item.dueLabel}`;
 }
 
-export default function EngineeringWorkspace() {
+export default function EngineeringWorkspace({
+  currentUserName,
+  canManage,
+}: {
+  currentUserName: string;
+  canManage: boolean;
+}) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState<WorkItemForm>(emptyForm);
+  const [form, setForm] = useState<WorkItemForm>(() => createEmptyForm(currentUserName));
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
   const [notice, setNotice] = useState('');
+  const people = useMemo(
+    () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
+    [currentUserName],
+  );
+  const initials = currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const firstName = currentUserName.split(/\s+/)[0];
 
   useEffect(() => {
     let active = true;
@@ -130,8 +143,8 @@ export default function EngineeringWorkspace() {
   }, [saving, showCreate]);
 
   const ownedWork = useMemo(
-    () => items.filter((item) => item.owner === CURRENT_ENGINEER),
-    [items],
+    () => items.filter((item) => item.owner === currentUserName),
+    [currentUserName, items],
   );
 
   const assignedActions = useMemo(
@@ -139,18 +152,18 @@ export default function EngineeringWorkspace() {
       items.flatMap((item) =>
         item.checklist
           .filter(
-            (step) => step.assignee === CURRENT_ENGINEER && step.status !== 'done',
+            (step) => step.assignee === currentUserName && step.status !== 'done',
           )
           .map((step) => ({ item, step })),
       ),
-    [items],
+    [currentUserName, items],
   );
 
   const blockedCount = ownedWork.filter((item) => item.health === 'blocked').length;
   const reviewCount = ownedWork.filter((item) => item.status === 'review').length;
 
   function openCreateDialog() {
-    setForm({ ...emptyForm, checklist: emptyForm.checklist.map((step) => ({ ...step })) });
+    setForm(createEmptyForm(currentUserName));
     setFormError('');
     setNotice('');
     setShowCreate(true);
@@ -188,7 +201,7 @@ export default function EngineeringWorkspace() {
     const input: CreateWorkItemInput = {
       ...form,
       status,
-      createdBy: CURRENT_ENGINEER,
+      createdBy: currentUserName,
       checklist: form.checklist.filter((step) => step.title.trim()),
     };
 
@@ -277,11 +290,11 @@ export default function EngineeringWorkspace() {
         </nav>
 
         <div className={styles.roleSwitch}>
-          <span className={styles.avatar}>AM</span>
+          <span className={styles.avatar}>{initials}</span>
           <span>
-            <strong>{CURRENT_ENGINEER}</strong>
-            <small>Propulsion engineer</small>
-            <Link href="/management">Open management workspace</Link>
+            <strong>{currentUserName}</strong>
+            <small>Authenticated engineer</small>
+            {canManage ? <Link href="/management">Open management workspace</Link> : null}
           </span>
         </div>
       </aside>
@@ -301,7 +314,7 @@ export default function EngineeringWorkspace() {
           <section className={styles.hero}>
             <div>
               <span className={styles.eyebrow}>Friday · 28 August</span>
-              <h2>Good morning, Arjun.</h2>
+              <h2>Good morning, {firstName}.</h2>
               <p>Own the result, coordinate the actions, and keep delivery visible.</p>
             </div>
             <div className={styles.syncState}>
@@ -505,7 +518,7 @@ export default function EngineeringWorkspace() {
                   <label>
                     <span>Accountable owner</span>
                     <select value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}>
-                      {ENGINEERS.map((engineer) => <option key={engineer}>{engineer}</option>)}
+                      {people.map((engineer) => <option key={engineer}>{engineer}</option>)}
                     </select>
                   </label>
                   <label>
@@ -538,14 +551,14 @@ export default function EngineeringWorkspace() {
                 <div className={styles.checklistEditor}>
                   <div className={styles.checklistHeader}>
                     <span>Checklist actions</span>
-                    <button type="button" onClick={() => setForm((current) => ({ ...current, checklist: [...current.checklist, { title: '', assignee: CURRENT_ENGINEER }] }))}>＋ Add action</button>
+                    <button type="button" onClick={() => setForm((current) => ({ ...current, checklist: [...current.checklist, { title: '', assignee: currentUserName }] }))}>＋ Add action</button>
                   </div>
                   {form.checklist.map((step, index) => (
                     <div className={styles.checklistRow} key={index}>
                       <span>{index + 1}</span>
                       <input value={step.title} onChange={(event) => updateChecklistDraft(index, 'title', event.target.value)} placeholder="Action or handoff" aria-label={`Checklist action ${index + 1}`} />
                       <select value={step.assignee} onChange={(event) => updateChecklistDraft(index, 'assignee', event.target.value)} aria-label={`Assignee for action ${index + 1}`}>
-                        {ENGINEERS.map((engineer) => <option key={engineer}>{engineer}</option>)}
+                        {people.map((engineer) => <option key={engineer}>{engineer}</option>)}
                       </select>
                       <button type="button" aria-label={`Remove checklist action ${index + 1}`} onClick={() => setForm((current) => ({ ...current, checklist: current.checklist.filter((_, stepIndex) => stepIndex !== index) }))}>×</button>
                     </div>

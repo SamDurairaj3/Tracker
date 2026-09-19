@@ -14,11 +14,15 @@ does not install or start PostgreSQL.
 1. Run `pnpm install` from the project folder.
 2. Copy `.env.example` to `.env.local` **only if `.env.local` does not exist**.
    Otherwise add the new variables to your existing file.
-3. Set `DATABASE_URL` to your database connection string. The checked-in password
-   is only an example. URL-encode any special characters in credentials.
-4. Run `pnpm db:migrate` to create the tables. You can safely rerun this command;
-   it records applied migrations and refuses changes to their contents.
-5. Run `pnpm dev`, then open `http://localhost:5173`.
+3. Set `DATABASE_URL` to the database connection string. The checked-in password
+   is only an example. URL-encode special characters in credentials.
+4. Create `secrets/better_auth_secret.txt` with at least 32 bytes of high-entropy
+   data and mode `0600`, then keep `BETTER_AUTH_SECRET_FILE` pointed at it. Do not
+   use `BETTER_AUTH_SECRET`; Tracker intentionally accepts the file form only.
+5. Run `pnpm db:migrate`. The runner applies both work-item and explicit Better
+   Auth migrations, records checksums, and refuses modified applied files.
+6. Create an invited admin with `pnpm auth:admin -- create --email <address> --name "<name>" --role admin`. The password is read twice from stdin.
+7. Run `pnpm dev`, then open `http://localhost:5173`.
 
 The app initially shows no work cards. Creating a card in engineering or mobile
 makes it available through management's existing refresh behavior. Requests do
@@ -28,8 +32,7 @@ it never silently falls back to D1 or browser storage.
 
 For a production-style local check, run `pnpm build`, then `pnpm start`.
 Both development and start commands bind to `127.0.0.1` only. The Node build lives
-in `.next-node`, separate from the old Sites outputs. Building requires no
-database connection; serving work records does.
+in `.next-node`, separate from the old Sites outputs. Building requires no database connection or auth secret; serving requests requires both.
 
 Next.js loads `.env.local` for the app. Database scripts explicitly load this
 same file with Node's `--env-file-if-exists`; already-exported environment
@@ -68,8 +71,9 @@ points to production: verify the database name before opting in.
 ## What changed internally
 
 - `db/postgres.ts` owns the lazy connection pool, bounded to five connections by
-  default (`DATABASE_POOL_MAX` can change this). Transactions use one checked-out
-  connection and always release it; failures roll back.
+  default (`DATABASE_POOL_MAX` can change this). Tracker and Better Auth reuse the
+  same pool. Transactions use one checked-out connection and always release it;
+  failures roll back.
 - `db/work-items.ts` implements the existing list/get/create/patch contract through
   a small SQL interface. There are no Cloudflare imports in the active data layer.
 - `db/migrations/` is the authoritative PostgreSQL schema. The migration command
@@ -85,8 +89,13 @@ points to production: verify the database name before opting in.
   timezone behavior. Optional fields remain null; checklist order and progress
   rules are unchanged. Only `checklist-count` currently computes progress from
   steps; the other modes retain their previous behavior.
-- `lib/work-items-api.ts` contains the unchanged HTTP behavior in a testable
-  factory. The route remains dynamic and explicitly selects the Node.js runtime.
+- `lib/work-items-api.ts` keeps the HTTP behavior testable while requiring an
+  authenticated admin or engineer for every operation. Creation overwrites
+  `createdBy` from the signed-in display name before storage.
+- `lib/auth.ts` configures Better Auth 1.7.5 with PostgreSQL-backed users,
+  accounts, sessions, verification data, and rate limits; the admin plugin owns
+  `admin` and `engineer` roles. Public sign-up is disabled and scrypt remains the
+  default password hash.
 
 ## Tests
 
@@ -151,29 +160,38 @@ PostgreSQL private. ARM64 image execution, backup restores, and a decision
 about any reverse proxy still require Pi-side work. The placeholders under
 `apps/api` are not an implemented NestJS backend.
 
-The app still has its existing fixed engineer identity and no authentication
-system. Authentication, access control, and HTTPS are separate deployment work;
-phone PWA installation/service-worker behavior also needs a secure browser origin.
-This task does not expose the app to a network or claim it is production-ready.
+Authentication is invite-only. `/management` requires an administrator;
+`/engineering`, `/mobile`, and every work-item API operation require an active
+admin or engineer session. The service worker caches static assets only and
+never caches protected HTML or API responses. The Pi guide documents a separate,
+review-only Quick Tunnel overlay; normal deployment does not start it.
 
-## Verification on 17 September 2026
+## Verification on 19 September 2026
 
-- ESLint and strict TypeScript checks passed.
-- The Next.js production build passed without a configured application database.
-- All 19 isolated tests passed.
-- All 15 native PostgreSQL contract tests passed on PostgreSQL 18.4 for Windows,
-  including multi-connection creation and updates. A portable test server was
-  used in the ignored `data/` directory, bound only to `127.0.0.1:55439`.
-- The production app was tested at `127.0.0.1:5175` against a separate test
-  database. Browser checks created cards through engineering and mobile,
-  completed an assigned checklist action, and verified the shared totals and
-  cards in management's Kanban and Gantt views. A mobile page reload retained
-  the saved cards and progress.
+- ESLint, strict TypeScript checks, and the Next.js production build passed. The
+  build requires neither a database connection nor an auth secret.
+- All 27 isolated tests passed. They cover the explicit Better Auth migration,
+  secret-file validation, closed role and redirect behavior, authenticated API
+  access, server-owned creator identity, the static-only service worker, and the
+  full work-item contract on PGlite.
+- All 15 native PostgreSQL contract tests passed on the disposable PostgreSQL
+  18.4 server, including multiple-connection creation and updates. The server
+  was bound only to `127.0.0.1:55439` and stopped after the run.
+- A separate native Better Auth smoke test applied both migrations, provisioned
+  an administrator through the server API, rejected public sign-up, completed a
+  login/session/logout round trip, verified the stored scrypt password, and
+  created a database-backed rate-limit record.
+- An HTTP check against the production build verified anonymous redirects and
+  API rejection, disabled public sign-up, admin and engineer sign-in, role-based
+  root and management routing, both engineer pages, and authenticated API access.
+- The six Pi shell scripts passed Ubuntu `/bin/sh` syntax checks. Docker Compose
+  accepted both the normal deployment and the opt-in Quick Tunnel overlay. The
+  source-only Pi archive was checked for required auth/tunnel files and excluded
+  secrets, environment files, dependencies, build output, databases, and backups.
 
-The temporary app and database servers were stopped after verification. No
-application `.env.local` was created, no D1 data was modified, and no Pi or
-Linux/ARM64 execution was tested. The ignored verification data is not a
-production database or an imported copy of user records.
+No application `.env.local` was created, no existing database or D1 data was
+modified, no Pi deployment was performed, and no tunnel was started. Linux ARM64
+runtime execution and final browser presentation remain Pi-side checks.
 
 Implementation references: [node-postgres transactions](https://node-postgres.com/features/transactions),
 [Next.js self-hosting](https://nextjs.org/docs/app/guides/self-hosting), and

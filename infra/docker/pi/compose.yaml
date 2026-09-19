@@ -64,13 +64,15 @@ services:
       DATABASE_PORT: "5432"
       DATABASE_NAME: tracker
       DATABASE_USER: tracker
-      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      DATABASE_PASSWORD_FILE: /run/tracker/postgres_password
       DATABASE_POOL_MAX: "5"
+      BETTER_AUTH_SECRET_FILE: /run/tracker/better_auth_secret
       NEXT_PUBLIC_APP_URL: http://localhost:5173
     secrets:
       - postgres_password
+      - better_auth_secret
     tmpfs:
-      - /run/tracker:size=64k,mode=0711
+      - /run/tracker:size=128k,mode=0711
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,6 +91,8 @@ services:
 secrets:
   postgres_password:
     file: ./secrets/postgres_password.txt
+  better_auth_secret:
+    file: ./secrets/better_auth_secret.txt
 
 networks:
   database:

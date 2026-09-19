@@ -1,13 +1,17 @@
 #!/bin/sh
 set -eu
 
-secret=/run/secrets/postgres_password
-private_copy=/run/tracker/postgres_password
-[ -s "$secret" ] || { echo 'Database secret is missing or empty' >&2; exit 1; }
+database_secret=/run/secrets/postgres_password
+auth_secret=/run/secrets/better_auth_secret
+private_database_secret=/run/tracker/postgres_password
+private_auth_secret=/run/tracker/better_auth_secret
+[ -s "$database_secret" ] || { echo 'Database secret is missing or empty' >&2; exit 1; }
+[ -s "$auth_secret" ] || { echo 'Authentication secret is missing or empty' >&2; exit 1; }
 
 # Compose file secrets are host bind mounts. A 0600 host file is readable to
-# root, so make a private copy in tmpfs before dropping to the unprivileged
-# application user. The password is never placed in an environment variable.
-install -m 0400 -o node -g node "$secret" "$private_copy"
-export DATABASE_PASSWORD_FILE="$private_copy"
+# root, so copy both into private tmpfs before dropping to the node user.
+install -m 0400 -o node -g node "$database_secret" "$private_database_secret"
+install -m 0400 -o node -g node "$auth_secret" "$private_auth_secret"
+export DATABASE_PASSWORD_FILE="$private_database_secret"
+export BETTER_AUTH_SECRET_FILE="$private_auth_secret"
 exec gosu node "$@"

@@ -69,16 +69,19 @@ test('failed migration rolls back schema and migration history together', async 
       "SELECT to_regclass('should_rollback')::text AS created, to_regclass('tracker_schema_migrations')::text AS history",
     );
     assert.deepEqual(rows, [{ created: null, history: null }]);
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql']);
   } finally { await close(); }
 });
 
 test('API storage failures retain generic error bodies and 500 statuses', async (context) => {
   context.mock.method(console, 'error', () => {});
   const fail = async (): Promise<never> => { throw new Error('private database diagnostic'); };
-  const api = createWorkItemHandlers({ listWorkItems: fail, insertWorkItem: fail, patchWorkItem: fail });
+  const api = createWorkItemHandlers(
+    { listWorkItems: fail, insertWorkItem: fail, patchWorkItem: fail },
+    async () => ({ name: 'Authenticated Engineer', role: 'engineer' }),
+  );
   for (const [response, message] of [
-    [await api.GET(), 'Work items could not be loaded.'],
+    [await api.GET(new Request('http://localhost/api/work-items')), 'Work items could not be loaded.'],
     [await api.POST(new Request('http://localhost', { method: 'POST', body: JSON.stringify(input) })), 'The work item could not be created.'],
     [await api.PATCH(new Request('http://localhost', { method: 'PATCH', body: JSON.stringify({ id: 'PROP-001' }) })), 'The work item could not be updated.'],
   ] as const) {

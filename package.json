@@ -19,12 +19,14 @@
     "test:postgres": "node --env-file-if-exists=.env.local --import tsx --test tests/postgres/*.test.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "auth:admin": "node --env-file-if-exists=.env.local --import tsx scripts/auth-admin.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.54.0",
     "@openai/sites-vite-plugin": "^0.2.0",
     "@tailwindcss/postcss": "^4.3.3",
+    "better-auth": "1.7.5",
     "next": "^16.3.3",
     "pg": "^8.23.0",
     "react": "^19.2.8",

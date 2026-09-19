@@ -21,9 +21,11 @@ export const input: CreateWorkItemInput = {
 };
 
 const demoEnvironment = { NODE_ENV: 'development', ALLOW_DEMO_SEED: 'true' } as const;
-function request(method: string, body: unknown) {
+function request(method: string, body?: unknown) {
   return new Request('http://localhost/api/work-items', {
-    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
 
@@ -170,11 +172,15 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     });
 
     it('preserves HTTP envelopes, validation, status codes, and mutations', async () => {
-      const api = createWorkItemHandlers(repository);
-      assert.deepEqual(await (await api.GET()).json(), { items: [] });
+      const api = createWorkItemHandlers(
+        repository,
+        async () => ({ name: 'Authenticated Engineer', role: 'engineer' }),
+      );
+      assert.deepEqual(await (await api.GET(request('GET'))).json(), { items: [] });
       const created = await api.POST(request('POST', input));
       assert.equal(created.status, 201);
       const { item } = await created.json() as { item: WorkItem };
+      assert.equal(item.createdBy, 'Authenticated Engineer');
       const updated = await api.PATCH(request('PATCH', { id: item.id, status: 'done' }));
       assert.equal(updated.status, 200);
       assert.equal((await updated.json() as { item: WorkItem }).item.progress, 100);

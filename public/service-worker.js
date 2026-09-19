@@ -1,7 +1,6 @@
-/* Vector Work mobile shell. Work-item API responses are always network-only. */
-const SHELL_CACHE = 'vector-work-mobile-shell-v1';
+/* Vector Work static assets. Protected HTML and every API response are network-only. */
+const SHELL_CACHE = 'vector-work-static-v2';
 const SHELL_ASSETS = [
-  '/mobile',
   '/manifest.webmanifest',
   '/icons/vector-work-192.png',
   '/icons/vector-work-512.png',
@@ -21,7 +20,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith('vector-work-mobile-shell-') && key !== SHELL_CACHE)
+            .filter((key) => key.startsWith('vector-work-') && key !== SHELL_CACHE)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -35,16 +34,10 @@ self.addEventListener('fetch', (event) => {
 
   if (
     request.method !== 'GET' ||
+    request.mode === 'navigate' ||
     url.origin !== self.location.origin ||
     url.pathname.startsWith('/api/')
   ) {
-    return;
-  }
-
-  if (request.mode === 'navigate' && url.pathname.startsWith('/mobile')) {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/mobile')),
-    );
     return;
   }
 
@@ -68,4 +61,3 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
-

@@ -1,0 +1,7 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.1
+    profiles: ["quick-tunnel"]
+    network_mode: host
+    restart: "no"
+    command: ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:5173"]

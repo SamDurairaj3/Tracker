@@ -6,7 +6,8 @@ uuid=$(sh "$script_dir/check-usb.sh")
 marker=/srv/tracker-data/tracker/.tracker-usb-uuid
 data_dir=/srv/tracker-data/tracker/postgres
 secret_dir="$script_dir/secrets"
-secret="$secret_dir/postgres_password.txt"
+database_secret="$secret_dir/postgres_password.txt"
+auth_secret="$secret_dir/better_auth_secret.txt"
 
 # The host check runs before any write under /srv/tracker-data.
 if [ -e "$marker" ] && [ "$(cat "$marker")" != "$uuid" ]; then
@@ -20,11 +21,18 @@ fi
 
 umask 077
 mkdir -p "$secret_dir"
-if [ ! -e "$secret" ]; then
-  command -v openssl >/dev/null 2>&1 || { echo 'OpenSSL is required to generate the database password' >&2; exit 1; }
-  openssl rand -base64 48 > "$secret"
+command -v openssl >/dev/null 2>&1 || {
+  echo 'OpenSSL is required to generate local secrets' >&2
+  exit 1
+}
+if [ ! -e "$database_secret" ]; then
+  openssl rand -base64 48 > "$database_secret"
 fi
-[ -s "$secret" ] || { echo 'Database password file is empty' >&2; exit 1; }
-chmod 600 "$secret"
-echo 'USB data directory and local database secret are ready.'
-echo 'Existing database files and existing password were preserved.'
+if [ ! -e "$auth_secret" ]; then
+  openssl rand -base64 48 > "$auth_secret"
+fi
+[ -s "$database_secret" ] || { echo 'Database password file is empty' >&2; exit 1; }
+[ -s "$auth_secret" ] || { echo 'Authentication secret file is empty' >&2; exit 1; }
+chmod 600 "$database_secret" "$auth_secret"
+echo 'USB data directory and local database and authentication secrets are ready.'
+echo 'Existing database files and existing secrets were preserved.'

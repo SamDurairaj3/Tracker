@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CURRENT_ENGINEER,
   ENGINEERS,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
@@ -66,24 +65,24 @@ function createClientDraftId() {
   return `draft-${Date.now().toString(36)}-${fallbackIdSequence.toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function newChecklistStep(): ChecklistDraft {
-  return { id: createClientDraftId(), title: '', assignee: CURRENT_ENGINEER };
+function newChecklistStep(currentUserName: string): ChecklistDraft {
+  return { id: createClientDraftId(), title: '', assignee: currentUserName };
 }
 
-function createEmptyDraft(): MobileDraft {
+function createEmptyDraft(currentUserName: string): MobileDraft {
   return {
     title: '',
     type: 'Task',
     purpose: '',
     expectedResult: '',
     team: 'Propulsion',
-    owner: CURRENT_ENGINEER,
+    owner: currentUserName,
     priority: 'High',
     start: '2026-09-12',
     due: '2026-09-19',
     linkedGoal: 'Flight readiness baseline',
     progressMethod: 'checklist-count',
-    checklist: [newChecklistStep()],
+    checklist: [newChecklistStep(currentUserName)],
   };
 }
 
@@ -102,14 +101,14 @@ function progressCopy(item: WorkItem) {
   return `${item.progress}% complete`;
 }
 
-export default function MobileWorkspace() {
+export default function MobileWorkspace({ currentUserName }: { currentUserName: string }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [view, setView] = useState<HomeView>('home');
   const [creating, setCreating] = useState(false);
   const [step, setStep] = useState(1);
-  const [draft, setDraft] = useState<MobileDraft>(() => createEmptyDraft());
+  const [draft, setDraft] = useState<MobileDraft>(() => createEmptyDraft(currentUserName));
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [createdItem, setCreatedItem] = useState<WorkItem | null>(null);
@@ -117,6 +116,12 @@ export default function MobileWorkspace() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const draftHydrated = useRef(false);
+  const people = useMemo(
+    () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
+    [currentUserName],
+  );
+  const initials = currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const firstName = currentUserName.split(/\s+/)[0];
 
   useEffect(() => {
     let active = true;
@@ -192,8 +197,8 @@ export default function MobileWorkspace() {
   }, []);
 
   const ownedWork = useMemo(
-    () => items.filter((item) => item.owner === CURRENT_ENGINEER && item.status !== 'done'),
-    [items],
+    () => items.filter((item) => item.owner === currentUserName && item.status !== 'done'),
+    [currentUserName, items],
   );
 
   const assignedActions = useMemo(
@@ -202,11 +207,11 @@ export default function MobileWorkspace() {
         item.checklist
           .filter(
             (action) =>
-              action.assignee === CURRENT_ENGINEER && action.status !== 'done',
+              action.assignee === currentUserName && action.status !== 'done',
           )
           .map((action) => ({ item, action })),
       ),
-    [items],
+    [currentUserName, items],
   );
 
   const blockedCount = ownedWork.filter((item) => item.health === 'blocked').length;
@@ -291,7 +296,7 @@ export default function MobileWorkspace() {
         .filter((action) => action.title.trim())
         .map(({ title, assignee }) => ({ title, assignee })),
       status,
-      createdBy: CURRENT_ENGINEER,
+      createdBy: currentUserName,
     };
 
     try {
@@ -301,7 +306,7 @@ export default function MobileWorkspace() {
       setItems((current) => [item, ...current]);
       setCreatedItem(item);
       window.localStorage.removeItem(DRAFT_KEY);
-      setDraft(createEmptyDraft());
+      setDraft(createEmptyDraft(currentUserName));
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -355,9 +360,9 @@ export default function MobileWorkspace() {
 
               <div className={styles.formBody}>
                 {step === 1 ? <OutcomeStep draft={draft} updateDraft={updateDraft} /> : null}
-                {step === 2 ? <OwnershipStep draft={draft} updateDraft={updateDraft} /> : null}
+                {step === 2 ? <OwnershipStep draft={draft} updateDraft={updateDraft} people={people} /> : null}
                 {step === 3 ? (
-                  <ActionsStep draft={draft} updateDraft={updateDraft} updateAction={updateAction} />
+                  <ActionsStep draft={draft} updateDraft={updateDraft} updateAction={updateAction} people={people} currentUserName={currentUserName} />
                 ) : null}
                 {step === 4 ? <ReviewStep draft={draft} /> : null}
 
@@ -402,7 +407,7 @@ export default function MobileWorkspace() {
           <strong>Vector Work</strong>
           <span>Cosmicport · Engineering</span>
         </div>
-        <div className={styles.avatar}>AM</div>
+        <div className={styles.avatar}>{initials}</div>
       </header>
 
       {!online ? (
@@ -416,7 +421,7 @@ export default function MobileWorkspace() {
           <>
             <div className={styles.greeting}>
               <span>Saturday · 12 September</span>
-              <h1>Ready for the next result, Arjun?</h1>
+              <h1>Ready for the next result, {firstName}?</h1>
             </div>
 
             <button className={styles.createButton} type="button" onClick={startCreate}>
@@ -532,7 +537,7 @@ function OutcomeStep({ draft, updateDraft }: StepProps) {
   );
 }
 
-function OwnershipStep({ draft, updateDraft }: StepProps) {
+function OwnershipStep({ draft, updateDraft, people }: StepProps & { people: string[] }) {
   return (
     <section className={styles.formStep}>
       <p className={styles.kicker}>Accountability</p><h1>Who owns the result, and when is it needed?</h1>
@@ -541,7 +546,7 @@ function OwnershipStep({ draft, updateDraft }: StepProps) {
         <label><span>Engineering team</span><select value={draft.team} onChange={(event) => updateDraft('team', event.target.value)}>{TEAMS.map((team) => <option key={team}>{team}</option>)}</select></label>
         <label><span>Priority</span><select value={draft.priority} onChange={(event) => updateDraft('priority', event.target.value as WorkPriority)}>{(['Critical', 'High', 'Medium'] as WorkPriority[]).map((priority) => <option key={priority}>{priority}</option>)}</select></label>
       </div>
-      <label><span>Accountable owner</span><select value={draft.owner} onChange={(event) => updateDraft('owner', event.target.value)}>{ENGINEERS.map((engineer) => <option key={engineer}>{engineer}</option>)}</select><small>One person owns the integrated result.</small></label>
+      <label><span>Accountable owner</span><select value={draft.owner} onChange={(event) => updateDraft('owner', event.target.value)}>{people.map((engineer) => <option key={engineer}>{engineer}</option>)}</select><small>One person owns the integrated result.</small></label>
       <div className={styles.twoFields}>
         <label><span>Start date</span><input type="date" value={draft.start} onChange={(event) => updateDraft('start', event.target.value)} /></label>
         <label><span>Due date</span><input type="date" value={draft.due} onChange={(event) => updateDraft('due', event.target.value)} /></label>
@@ -551,20 +556,20 @@ function OwnershipStep({ draft, updateDraft }: StepProps) {
   );
 }
 
-function ActionsStep({ draft, updateDraft, updateAction }: StepProps & { updateAction: (id: string, field: 'title' | 'assignee', value: string) => void }) {
+function ActionsStep({ draft, updateDraft, updateAction, people, currentUserName }: StepProps & { updateAction: (id: string, field: 'title' | 'assignee', value: string) => void; people: string[]; currentUserName: string }) {
   return (
     <section className={styles.formStep}>
       <p className={styles.kicker}>Coordination</p><h1>How will progress be earned?</h1>
       <p className={styles.stepIntro}>Actions can have different assignees. Keep one owner for the overall result.</p>
       <label><span>Progress method</span><select value={draft.progressMethod} onChange={(event) => updateDraft('progressMethod', event.target.value as ProgressMethod)}>{(Object.entries(PROGRESS_METHOD_LABELS) as Array<[ProgressMethod, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <div className={styles.actionsEditor}>
-        <header><div><strong>Checklist actions</strong><small>Assign each handoff clearly.</small></div><button type="button" onClick={() => updateDraft('checklist', [...draft.checklist, newChecklistStep()])}>＋ Add</button></header>
+        <header><div><strong>Checklist actions</strong><small>Assign each handoff clearly.</small></div><button type="button" onClick={() => updateDraft('checklist', [...draft.checklist, newChecklistStep(currentUserName)])}>＋ Add</button></header>
         {draft.checklist.map((action, index) => (
           <article key={action.id}>
             <div className={styles.actionNumber}>{index + 1}</div>
             <div>
               <label><span>Action</span><input value={action.title} onChange={(event) => updateAction(action.id, 'title', event.target.value)} placeholder="Run three thermal cycles" /></label>
-              <label><span>Assigned to</span><select value={action.assignee} onChange={(event) => updateAction(action.id, 'assignee', event.target.value)}>{ENGINEERS.map((engineer) => <option key={engineer}>{engineer}</option>)}</select></label>
+              <label><span>Assigned to</span><select value={action.assignee} onChange={(event) => updateAction(action.id, 'assignee', event.target.value)}>{people.map((engineer) => <option key={engineer}>{engineer}</option>)}</select></label>
             </div>
             <button type="button" aria-label={`Remove action ${index + 1}`} onClick={() => updateDraft('checklist', draft.checklist.filter((candidate) => candidate.id !== action.id))}>×</button>
           </article>

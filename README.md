@@ -1,6 +1,6 @@
 # Tracker
 
-Modular internal operations software, starting with work tracking for a engineering team.
+Modular internal operations software, starting with work tracking for an engineering team.
 
 ## Workspace layout
 
@@ -8,27 +8,27 @@ Modular internal operations software, starting with work tracking for a engineer
 app/                    Browser dashboard and API (Next.js)
 public/                 Web assets
 apps/
-  api/                 Main backend and business rules (NestJS)
-  mobile/              Future engineer companion app
+  api/                  Main backend and business rules (NestJS)
+  mobile/               Future engineer companion app
 packages/
-  ui/                  Shared interface components
-  contracts/           Shared API types and validation contracts
-  domain/              Framework-independent domain rules
-  config/              Shared TypeScript and tooling configuration
+  ui/                    Shared interface components
+  contracts/             Shared API types and validation contracts
+  domain/                Framework-independent domain rules
+  config/                Shared TypeScript and tooling configuration
 services/
-  analytics/           Future Python forecasting, simulation, ML, and LLM work
+  analytics/             Future Python forecasting, simulation, ML, and LLM work
 infra/
-  docker/              Local containers and deployment definitions
+  docker/                Local containers and deployment definitions
 docs/
-  product/             Product concepts and workflow definitions
-  architecture/        System design documentation
-  decisions/           Architecture decision records
-scripts/               Workspace maintenance and developer utilities
+  product/               Product concepts and workflow definitions
+  architecture/          System design documentation
+  decisions/             Architecture decision records
+scripts/                 Workspace maintenance and developer utilities
 tests/
-  e2e/                 Cross-application end-to-end tests
+  e2e/                   Cross-application end-to-end tests
 ```
 
-The current web slice stores work items in PostgreSQL through the shared API and displays them in the engineer, management, and mobile workspaces. It now runs on standard Node.js/Next.js in preparation for a later Raspberry Pi deployment.
+The current web slice stores work items in PostgreSQL through the shared API and displays them in the engineer, management, and mobile workspaces. It runs on standard Node.js/Next.js in preparation for a Raspberry Pi deployment and uses Better Auth for invite-only accounts and database-backed sessions.
 
 The web application stays at the workspace root. The existing `apps/api` and reusable package directories are future scaffolding; the active API is `app/api/work-items`. Historical Sites configuration is retained, but the old Cloudflare runtime cannot run this PostgreSQL version directly.
 
@@ -44,29 +44,30 @@ The web application stays at the workspace root. The existing `apps/api` and reu
 
 1. Install the workspace packages with `pnpm install`.
 2. Copy `.env.example` to `.env.local` if that file does not already exist; otherwise update it. Set `DATABASE_URL` for your database.
-3. Run `pnpm db:migrate` to create the PostgreSQL tables.
-4. Start the web application with `pnpm dev`.
-5. Open `http://localhost:5173`.
+3. Create an ignored `secrets/better_auth_secret.txt` containing one high-entropy line of at least 32 bytes. Keep `BETTER_AUTH_SECRET_FILE` in `.env.local` pointed at that file.
+4. Run `pnpm db:migrate` to create the work-item and authentication tables.
+5. Create the first invited administrator with `pnpm auth:admin -- create --email <address> --name "<name>" --role admin`. The command reads the password privately from stdin.
+6. Run `pnpm dev`, then open `http://localhost:5173` and sign in.
 
 New databases start empty. Demo seeding is an explicit, guarded operation; it is never run by startup or migrations. No browser storage is used as the source of truth for work records. Existing D1 data is preserved but has not been imported.
 
-See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) for local configuration and existing D1 data. The [Raspberry Pi deployment guide](docs/architecture/pi-deployment.md) covers transferring the app, checking the USB mount, and starting Docker Compose. Nothing has been deployed to the Pi.
+See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) for local authentication, database configuration, and existing D1 data. The [Raspberry Pi deployment guide](docs/architecture/pi-deployment.md) covers source transfer, USB checks, account provisioning, private SSH testing, and the separate opt-in Quick Tunnel review path. Nothing has been deployed to the Pi, and normal deployment does not start a tunnel.
 
 ## Application surfaces
 
 | Route | Audience | Purpose |
 |---|---|---|
-| `/management` | Management | Organization-wide work visibility with Kanban and Gantt views |
-| `/engineering` | Engineers | Create owned work, update its workflow, and complete assigned actions |
-| `/mobile` | Engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
+| `/management` | Administrators | Organization-wide work visibility with Kanban and Gantt views |
+| `/engineering` | Invited administrators and engineers | Create owned work, update its workflow, and complete assigned actions |
+| `/mobile` | Invited administrators and engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
 
-The root route redirects to `/management`. All three surfaces read and write the same work-item API, so engineer-created work is included in management totals, Kanban columns, filters, and the Gantt schedule.
+Unauthenticated requests go to `/login`. After sign-in, the root route sends administrators to `/management` and engineers to `/engineering`; engineers cannot open `/management`. Every work-item API operation also requires an active administrator or engineer session. All three surfaces use the same work-item API, so engineer-created work is included in management totals, Kanban columns, filters, and the Gantt schedule.
 
 ### Mobile PWA
 
-Open `/mobile` on a phone or supported desktop browser. When the browser offers installation, the install card adds Vector Work as a standalone app that starts on the mobile workspace.
+Open `/mobile` on a phone or supported desktop browser after signing in. When the browser offers installation, the install card adds Vector Work as a standalone app that starts on the mobile workspace.
 
-The mobile experience caches only its application shell and static assets. Work-item API responses are never treated as cached authoritative data. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active connection; once created, it uses the shared API and appears in management immediately.
+The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately.
 
 Superseded interface prototypes are preserved under `archive/` with timestamped filenames and explanatory header comments.
 
@@ -79,11 +80,12 @@ Superseded interface prototypes are preserved under `archive/` with timestamped 
 | `pnpm build` | Produce the deployable web build |
 | `pnpm start` | Serve the Node.js production build on localhost |
 | `pnpm db:migrate` | Apply pending PostgreSQL schema migrations |
+| `pnpm auth:admin -- <command>` | Create, list, disable, enable, reset, or verify invited accounts |
 | `pnpm db:seed:demo --confirm-demo` | Seed an empty development database only after explicit environment opt-in |
-| `pnpm test` | Run isolated embedded PostgreSQL and API tests |
+| `pnpm test` | Run isolated embedded PostgreSQL, auth, API, and security tests |
 | `pnpm test:postgres` | Run native PostgreSQL tests when `TEST_DATABASE_URL` is set |
 | `pnpm check` | Run lint, typecheck, tests, and production build |
 
 ## Environment files
 
-Commit safe variable names and local defaults in `.env.example`. Keep developer-specific values and every secret in ignored `.env.local` files.
+Commit safe variable names and local defaults in `.env.example`. Keep developer-specific values in ignored `.env.local` files and store authentication and database credentials in ignored secret files where the deployment supports them. Never use `NEXT_PUBLIC_` variables for secrets.
