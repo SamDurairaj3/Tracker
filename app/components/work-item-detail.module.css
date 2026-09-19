@@ -1,0 +1,242 @@
+.backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(4 18 14 / 68%);
+  backdrop-filter: blur(8px);
+}
+
+.dialog {
+  width: min(760px, 100%);
+  max-height: min(900px, calc(100dvh - 2rem));
+  overflow: hidden;
+  border: 1px solid rgb(204 221 213 / 75%);
+  border-radius: 1.25rem;
+  color: #14271f;
+  background: #f7faf8;
+  box-shadow: 0 2rem 6rem rgb(2 14 10 / 34%);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.4rem;
+  color: white;
+  background: linear-gradient(135deg, #0b2b21, #174d3a);
+}
+
+.header span {
+  color: #9fc7b7;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0.45rem 0 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  font-weight: 600;
+  line-height: 1.12;
+}
+
+.header button {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  color: white;
+  background: rgb(255 255 255 / 8%);
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.body {
+  max-height: calc(100dvh - 8.4rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.4rem 1.6rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.badges span {
+  padding: 0.36rem 0.65rem;
+  border-radius: 99px;
+  color: #425a50;
+  background: #e8efeb;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.badges .active,
+.badges .on-track { color: #21694c; background: #dcf3e8; }
+.badges .review,
+.badges .at-risk { color: #83591b; background: #faedce; }
+.badges .blocked { color: #9b4435; background: #fae5df; }
+.badges .done { color: #40554b; background: #e1e9e5; }
+
+.statusControl {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 13rem);
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-top: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #d7e2dc;
+  border-radius: 0.8rem;
+  background: white;
+}
+
+.statusControl > span { font-size: 0.82rem; font-weight: 800; }
+.statusControl select {
+  min-height: 2.4rem;
+  padding: 0 0.7rem;
+  border: 1px solid #bfd1c8;
+  border-radius: 0.55rem;
+  color: #173d2f;
+  background: white;
+  font: inherit;
+  font-size: 0.84rem;
+}
+.statusControl small { grid-column: 1 / -1; color: #71847b; font-size: 0.72rem; }
+
+.error {
+  margin: 0.8rem 0 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.6rem;
+  color: #8a372b;
+  background: #fde8e3;
+  font-size: 0.8rem;
+}
+
+.narrative {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.narrative > div {
+  padding: 0.95rem;
+  border: 1px solid #dde6e1;
+  border-radius: 0.8rem;
+  background: white;
+}
+
+.narrative .blocker { grid-column: 1 / -1; border-left: 4px solid #c05d48; background: #fff5f1; }
+.narrative h3,
+.narrative p { margin: 0; }
+.narrative h3 { font-size: 0.76rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.narrative p { margin-top: 0.45rem; color: #5d7067; font-size: 0.86rem; line-height: 1.55; }
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 1rem 0 0;
+  border: 1px solid #dde6e1;
+  border-radius: 0.8rem;
+  background: white;
+  overflow: hidden;
+}
+
+.facts div { min-width: 0; padding: 0.75rem 0.9rem; border-bottom: 1px solid #e8eeeb; }
+.facts div:nth-child(odd) { border-right: 1px solid #e8eeeb; }
+.facts dt { color: #77887f; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; }
+.facts dd { margin: 0.28rem 0 0; overflow-wrap: anywhere; font-size: 0.82rem; font-weight: 700; }
+
+.checklist {
+  margin-top: 1rem;
+  border: 1px solid #dce6e1;
+  border-radius: 0.8rem;
+  background: white;
+  overflow: hidden;
+}
+
+.checklist > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem;
+  border-bottom: 1px solid #e7edea;
+}
+
+.checklist h3,
+.checklist p { margin: 0; }
+.checklist h3 { font-size: 0.9rem; }
+.checklist header p { margin-top: 0.18rem; color: #788a81; font-size: 0.7rem; }
+.checklist header strong { color: #286c50; font-size: 0.82rem; }
+
+.checklist article {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.checklist article:last-of-type { border-bottom: 0; }
+.checklist article h4 { margin: 0; font-size: 0.82rem; line-height: 1.4; }
+.checklist article p { margin-top: 0.25rem; color: #71847b; font-size: 0.7rem; }
+.checklist .completed h4 { color: #718078; text-decoration: line-through; }
+
+.checkButton,
+.readOnlyState {
+  width: 1.8rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #9db7aa;
+  border-radius: 0.5rem;
+  color: #24714f;
+  background: white;
+  font-weight: 900;
+}
+
+.checkButton { cursor: pointer; }
+.checkButton:hover { border-color: #277354; background: #eef8f3; }
+.checkButton:disabled { cursor: wait; opacity: 0.65; }
+.readOnlyState { border-color: transparent; background: #edf2ef; }
+.empty { padding: 1rem; color: #71847b; font-size: 0.8rem; text-align: center; }
+
+@media (max-width: 620px) {
+  .backdrop { place-items: end center; padding: 0; }
+  .dialog { width: 100%; max-height: 94dvh; border-radius: 1.25rem 1.25rem 0 0; }
+  .body { max-height: calc(94dvh - 7rem); padding-inline: 1rem; padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .narrative,
+  .facts { grid-template-columns: 1fr; }
+  .facts div:nth-child(odd) { border-right: 0; }
+  .statusControl { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop { backdrop-filter: none; }
+}
+
+.checkSelect {
+  width: 7.4rem;
+  min-height: 1.8rem;
+  padding: 0 0.35rem;
+  border-color: #b9cec3;
+  color: #214f3d;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.checklist article.withSelect { grid-template-columns: 7.4rem minmax(0, 1fr); }
+
+.saving { margin: 0.7rem 0 0; color: #587267; font-size: 0.76rem; font-weight: 750; }

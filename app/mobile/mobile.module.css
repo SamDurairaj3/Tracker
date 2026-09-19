@@ -1070,4 +1070,124 @@
   .stepProgress i { transition: none; }
   .confetti { display: none; }
 }
+/* Interactive work surfaces */
+.workCard {
+  cursor: pointer;
+}
 
+.workCard:focus-visible {
+  outline: 3px solid rgb(43 132 94 / 28%);
+  outline-offset: 2px;
+}
+
+.actionList > article {
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+}
+
+.actionToggle {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #8daa9c;
+  border-radius: 0.65rem;
+  color: #1f7652;
+  background: white;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.actionToggle[aria-pressed='true'] {
+  border-color: #2f8d67;
+  color: white;
+  background: #2f8d67;
+}
+
+.actionToggle:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.actionOpen {
+  min-width: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.actionOpen:focus-visible {
+  border-radius: 0.5rem;
+  outline: 3px solid rgb(43 132 94 / 25%);
+  outline-offset: 3px;
+}
+
+.actionDone h2 {
+  color: #718078;
+  text-decoration: line-through;
+}
+
+.actionError {
+  margin: 0 0 0.8rem;
+  padding: 0.75rem;
+  border-radius: 0.7rem;
+  color: #8d3f32;
+  background: #fde9e4;
+  font-size: 0.82rem;
+}
+
+.notificationList {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.notificationList > button {
+  width: 100%;
+  min-height: 4.8rem;
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+  box-shadow: 0 0.25rem 1rem rgb(15 43 33 / 5%);
+  cursor: pointer;
+}
+
+.notificationList > button:focus-visible {
+  outline: 3px solid rgb(43 132 94 / 28%);
+  outline-offset: 2px;
+}
+
+.notificationMark {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #315f4e;
+  background: #e2f1e9;
+  font-weight: 900;
+}
+
+.notificationMark.attention { color: #80591e; background: #f9edcf; }
+.notificationMark.urgent { color: #943f31; background: #fae4df; }
+.notificationCopy { min-width: 0; }
+.notificationCopy strong,
+.notificationCopy small { display: block; }
+.notificationCopy strong { font-size: 0.9rem; line-height: 1.35; }
+.notificationCopy small { margin-top: 0.25rem; overflow: hidden; color: var(--muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.notificationArrow { color: #779086; font-size: 1.4rem; }
+
+.bottomNav svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}

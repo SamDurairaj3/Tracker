@@ -67,7 +67,7 @@ Unauthenticated requests go to `/login`. After sign-in, the root route sends adm
 
 Open `/mobile` on a phone or supported desktop browser after signing in. When the browser offers installation, the install card adds Vector Work as a standalone app that starts on the mobile workspace.
 
-The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately.
+The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately. Cards open a shared full-detail view. Engineers can update owned workflow status and their assigned checklist actions; administrators can update workflow and checklist status. Mobile Notifications is a live attention feed derived from current assignments, health, review state, and due dates, without unread persistence or push-notification claims.
 
 Superseded interface prototypes are preserved under `archive/` with timestamped filenames and explanatory header comments.
 

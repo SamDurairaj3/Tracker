@@ -1,21 +1,26 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import WorkItemDetail from '../components/work-item-detail';
 import {
   ENGINEERS,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
+  type ChecklistStatus,
   type CreateWorkItemInput,
   type ProgressMethod,
   type WorkItem,
+  type WorkItemPatch,
   type WorkItemType,
   type WorkPriority,
 } from '../../lib/work-items';
-import { createWorkItem, fetchWorkItems } from '../../lib/work-items-client';
+import { calendarDayDifference, defaultWorkDates, formatLiveDateTime, greetingForHour, localDateKey } from '../../lib/local-time';
+import { useLiveNow } from '../../lib/use-live-now';
+import { createWorkItem, fetchWorkItems, updateWorkItem } from '../../lib/work-items-client';
 import styles from './mobile.module.css';
 
-type HomeView = 'home' | 'work' | 'actions';
+type HomeView = 'home' | 'work' | 'actions' | 'notifications';
 type ChecklistDraft = { id: string; title: string; assignee: string };
 type MobileDraft = {
   title: string;
@@ -69,7 +74,8 @@ function newChecklistStep(currentUserName: string): ChecklistDraft {
   return { id: createClientDraftId(), title: '', assignee: currentUserName };
 }
 
-function createEmptyDraft(currentUserName: string): MobileDraft {
+function createEmptyDraft(currentUserName: string, now = new Date()): MobileDraft {
+  const dates = defaultWorkDates(now);
   return {
     title: '',
     type: 'Task',
@@ -78,8 +84,7 @@ function createEmptyDraft(currentUserName: string): MobileDraft {
     team: 'Propulsion',
     owner: currentUserName,
     priority: 'High',
-    start: '2026-09-12',
-    due: '2026-09-19',
+    ...dates,
     linkedGoal: 'Flight readiness baseline',
     progressMethod: 'checklist-count',
     checklist: [newChecklistStep(currentUserName)],
@@ -115,6 +120,10 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
   const [online, setOnline] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const [updatingActionId, setUpdatingActionId] = useState('');
+  const [actionError, setActionError] = useState('');
+  const now = useLiveNow();
   const draftHydrated = useRef(false);
   const people = useMemo(
     () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
@@ -141,7 +150,7 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentUserName]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -149,14 +158,16 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
       setInstalled(window.matchMedia('(display-mode: standalone)').matches);
       try {
         const savedDraft = window.localStorage.getItem(DRAFT_KEY);
-        if (savedDraft) setDraft(JSON.parse(savedDraft) as MobileDraft);
+        setDraft(savedDraft
+          ? JSON.parse(savedDraft) as MobileDraft
+          : createEmptyDraft(currentUserName, new Date()));
       } catch {
         window.localStorage.removeItem(DRAFT_KEY);
       }
       draftHydrated.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [currentUserName]);
 
   useEffect(() => {
     if (!draftHydrated.current) return;
@@ -194,7 +205,7 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
       window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
       window.removeEventListener('appinstalled', handleInstalled);
     };
-  }, []);
+  }, [currentUserName]);
 
   const ownedWork = useMemo(
     () => items.filter((item) => item.owner === currentUserName && item.status !== 'done'),
@@ -202,22 +213,61 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
   );
 
   const assignedActions = useMemo(
-    () =>
-      items.flatMap((item) =>
-        item.checklist
-          .filter(
-            (action) =>
-              action.assignee === currentUserName && action.status !== 'done',
-          )
-          .map((action) => ({ item, action })),
-      ),
+    () => items.flatMap((item) => item.checklist
+      .filter((action) => action.assignee === currentUserName)
+      .map((action) => ({ item, action }))),
     [currentUserName, items],
   );
-
+  const openAssignedActions = useMemo(
+    () => assignedActions.filter(({ action }) => action.status !== 'done'),
+    [assignedActions],
+  );
   const blockedCount = ownedWork.filter((item) => item.health === 'blocked').length;
   const draftAvailable = hasDraftContent(draft);
+  const today = now ? localDateKey(now) : '';
+  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const closeDetail = useCallback(() => setSelectedItemId(''), []);
+  const notifications = useMemo(() => {
+    if (!today) return [];
+    const signals: Array<{
+      key: string;
+      item: WorkItem;
+      title: string;
+      detail: string;
+      tone: 'urgent' | 'attention' | 'normal';
+    }> = [];
+
+    for (const { item, action } of openAssignedActions) {
+      signals.push({
+        key: `action:${action.id}`,
+        item,
+        title: action.status === 'blocked' ? 'Assigned action is blocked' : 'Assigned action is open',
+        detail: `${action.title} · ${item.id}`,
+        tone: action.status === 'blocked' ? 'urgent' : 'normal',
+      });
+    }
+
+    for (const item of ownedWork) {
+      const days = calendarDayDifference(today, item.due);
+      if (item.health === 'blocked') {
+        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is blocked', detail: `${item.id} · ${item.title}`, tone: 'urgent' });
+      } else if (days !== null && days < 0) {
+        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is overdue', detail: `${item.id} · ${item.title}`, tone: 'urgent' });
+      } else if (item.health === 'at-risk') {
+        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is at risk', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+      } else if (item.status === 'review') {
+        signals.push({ key: `work:${item.id}`, item, title: 'Ready for your review follow-through', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+      } else if (days !== null && days <= 2) {
+        signals.push({ key: `work:${item.id}`, item, title: days === 0 ? 'Owned work is due today' : 'Owned work is due soon', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+      }
+    }
+
+    const rank = { urgent: 0, attention: 1, normal: 2 } as const;
+    return signals.sort((first, second) => rank[first.tone] - rank[second.tone]);
+  }, [openAssignedActions, ownedWork, today]);
 
   function startCreate() {
+    if (!hasDraftContent(draft)) setDraft(createEmptyDraft(currentUserName, new Date()));
     setView('home');
     setStep(1);
     setCreatedItem(null);
@@ -236,6 +286,34 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
         action.id === id ? { ...action, [field]: value } : action,
       ),
     }));
+  }
+
+  const saveMobileUpdate = useCallback(async (patch: WorkItemPatch) => {
+    const updated = await updateWorkItem(patch);
+    setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+    return updated;
+  }, []);
+
+  async function toggleAssignedAction(itemId: string, stepId: string, status: ChecklistStatus) {
+    try {
+      setUpdatingActionId(stepId);
+      setActionError('');
+      await saveMobileUpdate({
+        id: itemId,
+        checklistStep: { id: stepId, status: status === 'done' ? 'open' : 'done' },
+      });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The action could not be updated.');
+    } finally {
+      setUpdatingActionId('');
+    }
+  }
+
+  function openFromKeyboard(event: React.KeyboardEvent, itemId: string) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setSelectedItemId(itemId);
+    }
   }
 
   function validateStep(currentStep: number) {
@@ -306,7 +384,7 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
       setItems((current) => [item, ...current]);
       setCreatedItem(item);
       window.localStorage.removeItem(DRAFT_KEY);
-      setDraft(createEmptyDraft(currentUserName));
+      setDraft(createEmptyDraft(currentUserName, new Date()));
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -412,7 +490,7 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
 
       {!online ? (
         <div className={styles.offlineBanner} role="status">
-          <span>Offline</span> Your app shell and device draft are available. Live work and creating require a connection.
+          <span>Offline</span> This open screen and your device draft remain available. Live work and creating require a connection.
         </div>
       ) : null}
 
@@ -420,8 +498,8 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
         {view === 'home' ? (
           <>
             <div className={styles.greeting}>
-              <span>Saturday · 12 September</span>
-              <h1>Ready for the next result, {firstName}?</h1>
+              <span>{now ? formatLiveDateTime(now) : 'Local time'}</span>
+              <h1>{now ? greetingForHour(now.getHours()) : 'Welcome'}, {firstName}.</h1>
             </div>
 
             <button className={styles.createButton} type="button" onClick={startCreate}>
@@ -443,36 +521,74 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
 
             <div className={styles.summaryRow}>
               <article><strong>{ownedWork.length}</strong><span>Owned work</span></article>
-              <article><strong>{assignedActions.length}</strong><span>Open actions</span></article>
+              <article><strong>{openAssignedActions.length}</strong><span>Open actions</span></article>
               <article><strong>{blockedCount}</strong><span>Blocked</span></article>
             </div>
 
-            <WorkList items={ownedWork.slice(0, 3)} loading={loading} error={loadError} title="My work" suffix={`${ownedWork.length} active`} />
+            <WorkList items={ownedWork.slice(0, 3)} loading={loading} error={loadError} title="My work" suffix={`${ownedWork.length} active`} onOpen={setSelectedItemId} />
           </>
         ) : null}
 
         {view === 'work' ? (
           <>
             <ScreenHeading eyebrow="Accountability" title="My owned work" description="Results you are accountable for delivering." />
-            <WorkList items={ownedWork} loading={loading} error={loadError} />
+            <WorkList items={ownedWork} loading={loading} error={loadError} onOpen={setSelectedItemId} />
           </>
         ) : null}
 
         {view === 'actions' ? (
           <>
-            <ScreenHeading eyebrow="Contribution" title="My assigned actions" description="Your open actions across work owned by every team." />
+            <ScreenHeading eyebrow="Contribution" title="My assigned actions" description="Complete or reopen actions assigned to you across every team." />
+            {actionError ? <p className={styles.actionError} role="alert">{actionError}</p> : null}
             <section className={styles.actionList} id="actions">
               {assignedActions.map(({ item, action }) => (
-                <article key={action.id}>
-                  <span className={`${styles.actionState} ${styles[action.status]}`} aria-hidden="true" />
-                  <div>
+                <article key={action.id} className={action.status === 'done' ? styles.actionDone : undefined}>
+                  <button
+                    type="button"
+                    className={styles.actionToggle}
+                    disabled={updatingActionId === action.id}
+                    aria-pressed={action.status === 'done'}
+                    aria-label={`${action.status === 'done' ? 'Reopen' : 'Complete'} ${action.title}`}
+                    onClick={() => void toggleAssignedAction(item.id, action.id, action.status)}
+                  >
+                    {updatingActionId === action.id ? '…' : action.status === 'done' ? '✓' : ''}
+                  </button>
+                  <div
+                    className={styles.actionOpen}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${item.id}: ${item.title}`}
+                    onClick={() => setSelectedItemId(item.id)}
+                    onKeyDown={(event) => openFromKeyboard(event, item.id)}
+                  >
                     <h2>{action.title}</h2>
                     <p>{item.id} · {item.title}</p>
                     <footer><span>{action.status.replace('-', ' ')}</span><span>Owner · {item.owner}</span></footer>
                   </div>
                 </article>
               ))}
-              {!loading && !assignedActions.length ? <EmptyState copy="No open actions assigned to you." /> : null}
+              {!loading && !assignedActions.length ? <EmptyState copy="No actions are assigned to you." /> : null}
+            </section>
+          </>
+        ) : null}
+
+        {view === 'notifications' ? (
+          <>
+            <ScreenHeading eyebrow="Live attention" title="Notifications" description="Derived from current work and assignments. Nothing here is a fake unread or push notification." />
+            <section className={styles.notificationList} aria-label="Current work attention">
+              {notifications.map((signal) => (
+                <button key={signal.key} type="button" onClick={() => setSelectedItemId(signal.item.id)}>
+                  <span className={`${styles.notificationMark} ${styles[signal.tone]}`} aria-hidden="true">!</span>
+                  <span className={styles.notificationCopy}>
+                    <strong>{signal.title}</strong>
+                    <small>{signal.detail}</small>
+                  </span>
+                  <span className={styles.notificationArrow} aria-hidden="true">›</span>
+                </button>
+              ))}
+              {!loading && !notifications.length ? (
+                <EmptyState copy="Nothing currently needs your attention. This feed updates from live work status, dates, and assignments." />
+              ) : null}
             </section>
           </>
         ) : null}
@@ -483,8 +599,19 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
         <button className={view === 'work' ? styles.activeNav : ''} type="button" onClick={() => setView('work')}><span>▤</span><small>My work</small></button>
         <button className={styles.floatingCreate} type="button" onClick={startCreate} aria-label="Create work card"><span>＋</span></button>
         <button className={view === 'actions' ? styles.activeNav : ''} type="button" onClick={() => setView('actions')}><span>✓</span><small>Actions</small></button>
-        <a href="/engineering"><span>•••</span><small>More</small></a>
+        <button className={view === 'notifications' ? styles.activeNav : ''} type="button" onClick={() => setView('notifications')} aria-label="Notifications">
+          <span aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></span>
+          <small>Notifications</small>
+        </button>
       </nav>
+      <WorkItemDetail
+        key={selectedItem?.id ?? 'closed'}
+        item={selectedItem}
+        onClose={closeDetail}
+        onUpdate={saveMobileUpdate}
+        canUpdateStatus={Boolean(selectedItem?.owner === currentUserName)}
+        canUpdateChecklist={(step) => step.assignee === currentUserName}
+      />
     </main>
   );
 }
@@ -493,13 +620,26 @@ function ScreenHeading({ eyebrow, title, description }: { eyebrow: string; title
   return <header className={styles.screenHeading}><span>{eyebrow}</span><h1>{title}</h1><p>{description}</p></header>;
 }
 
-function WorkList({ items, loading, error, title, suffix }: { items: WorkItem[]; loading: boolean; error: string; title?: string; suffix?: string }) {
+function WorkList({ items, loading, error, title, suffix, onOpen }: { items: WorkItem[]; loading: boolean; error: string; title?: string; suffix?: string; onOpen: (id: string) => void }) {
   return (
     <section className={styles.workSection} id="work">
       {title ? <header><h2>{title}</h2><span>{suffix}</span></header> : null}
       <div className={styles.cardList}>
         {items.map((item) => (
-          <article className={styles.workCard} key={item.id}>
+          <article
+            className={styles.workCard}
+            key={item.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${item.id}: ${item.title}`}
+            onClick={() => onOpen(item.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onOpen(item.id);
+              }
+            }}
+          >
             <div className={styles.cardMeta}><span>{item.id}</span><b className={styles[item.status]}>{STATUS_LABELS[item.status]}</b></div>
             <h3>{item.title}</h3>
             {item.health === 'blocked' ? <p className={styles.blockedCopy}>Blocked · {progressCopy(item)}</p> : null}

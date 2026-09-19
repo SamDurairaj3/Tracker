@@ -112,6 +112,11 @@ docker compose --env-file .env -f compose.yaml logs --tail 100
 
 Migrations are repeatable and checksummed. Transfer corrected source over the
 existing tree and rerun `sh ./deploy.sh`; do not delete the database or secrets.
+If the optional Quick Tunnel is already running, it can remain running during
+this base deployment. `deploy.sh` stops and replaces only the web service, so the
+existing tunnel container and random URL remain, but requests can fail briefly
+while the web service is stopped, migrated, and restarted. Deployment never
+starts a stopped tunnel automatically.
 
 ## 5. Provision invited users
 

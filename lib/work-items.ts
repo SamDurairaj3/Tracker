@@ -17,6 +17,22 @@ export type ProgressMethod =
   | 'manual-estimate';
 export type ChecklistStatus = 'open' | 'in-progress' | 'done' | 'blocked';
 
+export const WORK_STATUSES = ['captured', 'ready', 'active', 'review', 'done'] as const;
+export const WORK_HEALTH_VALUES = ['on-track', 'at-risk', 'blocked'] as const;
+export const CHECKLIST_STATUSES = ['open', 'in-progress', 'done', 'blocked'] as const;
+
+export function isWorkStatus(value: unknown): value is WorkStatus {
+  return typeof value === 'string' && WORK_STATUSES.includes(value as WorkStatus);
+}
+
+export function isWorkHealth(value: unknown): value is WorkHealth {
+  return typeof value === 'string' && WORK_HEALTH_VALUES.includes(value as WorkHealth);
+}
+
+export function isChecklistStatus(value: unknown): value is ChecklistStatus {
+  return typeof value === 'string' && CHECKLIST_STATUSES.includes(value as ChecklistStatus);
+}
+
 export type ChecklistStep = {
   id: string;
   workItemId: string;

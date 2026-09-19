@@ -170,10 +170,11 @@ review-only Quick Tunnel overlay; normal deployment does not start it.
 
 - ESLint, strict TypeScript checks, and the Next.js production build passed. The
   build requires neither a database connection nor an auth secret.
-- All 27 isolated tests passed. They cover the explicit Better Auth migration,
+- All 31 isolated tests passed. They cover the explicit Better Auth migration,
   secret-file validation, closed role and redirect behavior, authenticated API
-  access, server-owned creator identity, the static-only service worker, and the
-  full work-item contract on PGlite.
+  access, server-owned creator identity, local date and Gantt calculations, PATCH
+  validation and engineer mutation boundaries, the static-only service worker,
+  and the full work-item contract on PGlite.
 - All 15 native PostgreSQL contract tests passed on the disposable PostgreSQL
   18.4 server, including multiple-connection creation and updates. The server
   was bound only to `127.0.0.1:55439` and stopped after the run.

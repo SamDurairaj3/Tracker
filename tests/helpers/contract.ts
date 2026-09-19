@@ -174,7 +174,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     it('preserves HTTP envelopes, validation, status codes, and mutations', async () => {
       const api = createWorkItemHandlers(
         repository,
-        async () => ({ name: 'Authenticated Engineer', role: 'engineer' }),
+        async () => ({ name: 'Authenticated Engineer', role: 'admin' }),
       );
       assert.deepEqual(await (await api.GET(request('GET'))).json(), { items: [] });
       const created = await api.POST(request('POST', input));
@@ -184,7 +184,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
       const updated = await api.PATCH(request('PATCH', { id: item.id, status: 'done' }));
       assert.equal(updated.status, 200);
       assert.equal((await updated.json() as { item: WorkItem }).item.progress, 100);
-      const missing = await api.PATCH(request('PATCH', { id: 'absent' }));
+      const missing = await api.PATCH(request('PATCH', { id: 'absent', status: 'active' }));
       assert.equal(missing.status, 404);
       assert.deepEqual(await missing.json(), { error: 'Work item not found.' });
       assert.equal((await api.PATCH(request('PATCH', {}))).status, 400);

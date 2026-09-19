@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import WorkItemDetail from '../components/work-item-detail';
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -15,10 +17,13 @@ import {
   type CreateWorkItemInput,
   type ProgressMethod,
   type WorkItem,
+  type WorkItemPatch,
   type WorkItemType,
   type WorkPriority,
   type WorkStatus,
 } from '../../lib/work-items';
+import { defaultWorkDates, dueCopy, formatLiveDateTime, greetingForHour, localDateKey } from '../../lib/local-time';
+import { useLiveNow } from '../../lib/use-live-now';
 import {
   createWorkItem,
   fetchWorkItems,
@@ -43,7 +48,8 @@ type WorkItemForm = {
   checklist: ChecklistDraft[];
 };
 
-function createEmptyForm(currentUserName: string): WorkItemForm {
+function createEmptyForm(currentUserName: string, now = new Date()): WorkItemForm {
+  const dates = defaultWorkDates(now);
   return {
     title: '',
     type: 'Task',
@@ -53,8 +59,7 @@ function createEmptyForm(currentUserName: string): WorkItemForm {
     purpose: '',
     expectedResult: '',
     linkedGoal: 'Flight readiness baseline',
-    start: '2026-08-28',
-    due: '2026-09-04',
+    ...dates,
     progressMethod: 'checklist-count',
     checklist: [
       { title: '', assignee: currentUserName },
@@ -84,10 +89,9 @@ const checklistStatusLabels: Record<ChecklistStatus, string> = {
   blocked: 'Blocked',
 };
 
-function dueTone(item: WorkItem) {
+function dueTone(item: WorkItem, today: string) {
   if (item.health === 'blocked') return 'Blocked';
-  if (item.due === '2026-08-28') return 'Due today';
-  return `Due ${item.dueLabel}`;
+  return dueCopy(item.due, today);
 }
 
 export default function EngineeringWorkspace({
@@ -106,12 +110,23 @@ export default function EngineeringWorkspace({
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
   const [notice, setNotice] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const now = useLiveNow();
   const people = useMemo(
     () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
     [currentUserName],
   );
   const initials = currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const firstName = currentUserName.split(/\s+/)[0];
+  const today = now ? localDateKey(now) : '';
+  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const closeDetail = useCallback(() => setSelectedItemId(''), []);
+  const openFromKeyboard = (event: React.KeyboardEvent, id: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setSelectedItemId(id);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -163,7 +178,7 @@ export default function EngineeringWorkspace({
   const reviewCount = ownedWork.filter((item) => item.status === 'review').length;
 
   function openCreateDialog() {
-    setForm(createEmptyForm(currentUserName));
+    setForm(createEmptyForm(currentUserName, new Date()));
     setFormError('');
     setNotice('');
     setShowCreate(true);
@@ -233,6 +248,15 @@ export default function EngineeringWorkspace({
     } finally {
       setUpdatingId('');
     }
+  }
+
+  async function saveDetailUpdate(patch: WorkItemPatch) {
+    const updated = await updateWorkItem(patch);
+    setItems((current) =>
+      current.map((candidate) => candidate.id === updated.id ? updated : candidate),
+    );
+    setNotice(`${updated.id} was updated.`);
+    return updated;
   }
 
   async function toggleChecklistStep(
@@ -313,8 +337,8 @@ export default function EngineeringWorkspace({
         <div className={styles.content}>
           <section className={styles.hero}>
             <div>
-              <span className={styles.eyebrow}>Friday · 28 August</span>
-              <h2>Good morning, {firstName}.</h2>
+              <span className={styles.eyebrow}>{now ? formatLiveDateTime(now) : 'Local time'}</span>
+              <h2>{now ? greetingForHour(now.getHours()) : 'Welcome'}, {firstName}.</h2>
               <p>Own the result, coordinate the actions, and keep delivery visible.</p>
             </div>
             <div className={styles.syncState}>
@@ -371,13 +395,21 @@ export default function EngineeringWorkspace({
                   const completedSteps = item.checklist.filter((step) => step.status === 'done').length;
                   return (
                     <article className={styles.workCard} key={item.id} id={item.health === 'blocked' ? 'blocked' : undefined}>
-                      <div className={styles.workMeta}>
+                      <div
+                        className={styles.workCardOpen}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open ${item.id}: ${item.title}`}
+                        onClick={() => setSelectedItemId(item.id)}
+                        onKeyDown={(event) => openFromKeyboard(event, item.id)}
+                      >
+                        <div className={styles.workMeta}>
                         <span>{item.id}</span>
                         <span className={`${styles.status} ${styles[item.status]}`}>
                           <i aria-hidden="true" /> {STATUS_LABELS[item.status]}
                         </span>
                         <span className={`${styles.due} ${item.health !== 'on-track' ? styles.attention : ''}`}>
-                          {dueTone(item)}
+                          {dueTone(item, today)}
                         </span>
                       </div>
                       <h4>{item.title}</h4>
@@ -391,6 +423,7 @@ export default function EngineeringWorkspace({
                             ? `${completedSteps}/${item.checklist.length} actions done`
                             : PROGRESS_METHOD_LABELS[item.progressMethod]}
                         </small>
+                      </div>
                       </div>
                       <footer>
                         <span>{item.team} · {item.priority}</span>
@@ -434,7 +467,14 @@ export default function EngineeringWorkspace({
                     >
                       {updatingId === step.id ? '…' : ''}
                     </button>
-                    <div>
+                    <div
+                      className={styles.actionOpen}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open ${item.id}: ${item.title}`}
+                      onClick={() => setSelectedItemId(item.id)}
+                      onKeyDown={(event) => openFromKeyboard(event, item.id)}
+                    >
                       <h4>{step.title}</h4>
                       <p>{item.id} · {item.title}</p>
                       <footer>
@@ -577,6 +617,15 @@ export default function EngineeringWorkspace({
           </section>
         </div>
       ) : null}
+      <WorkItemDetail
+        key={selectedItem?.id ?? 'closed'}
+        item={selectedItem}
+        onClose={closeDetail}
+        onUpdate={saveDetailUpdate}
+        canUpdateStatus={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName))}
+        canUpdateChecklist={(step) => canManage || step.assignee === currentUserName}
+        allowAllChecklistStatuses={canManage}
+      />
     </main>
   );
 }

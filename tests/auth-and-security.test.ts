@@ -85,6 +85,7 @@ test('work-item API rejects anonymous and unauthorized callers before storage', 
   let calls = 0;
   const repository = {
     async listWorkItems() { calls += 1; return []; },
+    async getWorkItem() { calls += 1; return null; },
     async insertWorkItem() { calls += 1; return stubItem('unused'); },
     async patchWorkItem() { calls += 1; return null; },
   };
@@ -108,6 +109,7 @@ test('work-item creation always uses the authenticated display name', async () =
   let recorded = '';
   const api = createWorkItemHandlers({
     async listWorkItems() { return []; },
+    async getWorkItem() { return null; },
     async insertWorkItem(value) {
       recorded = value.createdBy;
       return stubItem(value.createdBy);

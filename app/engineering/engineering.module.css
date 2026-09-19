@@ -444,6 +444,17 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
+.workCardOpen {
+  outline: 0;
+  cursor: pointer;
+}
+
+.workCardOpen:focus-visible {
+  border-radius: 7px;
+  outline: 3px solid rgb(54 137 99 / 25%);
+  outline-offset: 4px;
+}
+
 .workCard:hover {
   border-color: #bdd8ca;
   box-shadow: 0 8px 22px rgb(32 76 57 / 7%);
@@ -509,7 +520,7 @@
   line-height: 1.35;
 }
 
-.workCard > p {
+.workCardOpen > p {
   margin: 0;
   color: #75817c;
   font-size: 10px;
@@ -636,6 +647,18 @@
 .checkButton:hover {
   border-color: var(--green);
   background: #eff8f3;
+}
+
+.actionOpen {
+  min-width: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.actionOpen:focus-visible {
+  border-radius: 5px;
+  outline: 3px solid rgb(54 137 99 / 25%);
+  outline-offset: 3px;
 }
 
 .actionList h4 {

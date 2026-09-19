@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchWorkItems } from '../../lib/work-items-client';
-import type { WorkHealth, WorkItem, WorkStatus } from '../../lib/work-items';
+import WorkItemDetail from '../components/work-item-detail';
+import { buildTimeline, timelinePosition } from '../../lib/work-schedule';
+import { useLiveNow } from '../../lib/use-live-now';
+import { fetchWorkItems, updateWorkItem } from '../../lib/work-items-client';
+import type { WorkHealth, WorkItem, WorkItemPatch, WorkStatus } from '../../lib/work-items';
 import styles from './management.module.css';
 
 type ViewMode = 'kanban' | 'gantt';
@@ -22,33 +25,6 @@ const healthLabels: Record<WorkHealth, string> = {
   blocked: 'Blocked',
 };
 
-const timelineStart = new Date('2026-08-24T00:00:00Z');
-const timelineDays = 28;
-const dayInMilliseconds = 86_400_000;
-
-const timelineWeeks = [
-  { label: '24–30 Aug', sublabel: 'Week 35' },
-  { label: '31 Aug–06 Sep', sublabel: 'Week 36' },
-  { label: '07–13 Sep', sublabel: 'Week 37' },
-  { label: '14–20 Sep', sublabel: 'Week 38' },
-];
-
-function dateOffset(date: string) {
-  const parsed = new Date(`${date}T00:00:00Z`);
-  return Math.round((parsed.getTime() - timelineStart.getTime()) / dayInMilliseconds);
-}
-
-function ganttPosition(item: WorkItem) {
-  const rawStart = dateOffset(item.start);
-  const rawEnd = dateOffset(item.due);
-  const start = Math.max(0, Math.min(timelineDays - 1, rawStart));
-  const end = Math.max(start, Math.min(timelineDays - 1, rawEnd));
-
-  return {
-    gridColumn: `${start + 1} / span ${end - start + 1}`,
-  };
-}
-
 export default function ManagementDashboard() {
   const [view, setView] = useState<ViewMode>('kanban');
   const [query, setQuery] = useState('');
@@ -56,6 +32,8 @@ export default function ManagementDashboard() {
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loadError, setLoadError] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const now = useLiveNow();
 
   const refreshWorkItems = useCallback(async () => {
     try {
@@ -115,6 +93,23 @@ export default function ManagementDashboard() {
   const blockedCount = workItems.filter((item) => item.health === 'blocked').length;
   const reviewCount = workItems.filter((item) => item.status === 'review').length;
   const atRiskCount = workItems.filter((item) => item.health === 'at-risk').length;
+  const selectedItem = workItems.find((item) => item.id === selectedItemId) ?? null;
+  const timeline = useMemo(
+    () => now ? buildTimeline(filteredItems, now) : null,
+    [filteredItems, now],
+  );
+  const closeDetail = useCallback(() => setSelectedItemId(''), []);
+  const saveUpdate = useCallback(async (patch: WorkItemPatch) => {
+    const updated = await updateWorkItem(patch);
+    setWorkItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+    return updated;
+  }, []);
+  const openFromKeyboard = (event: React.KeyboardEvent, id: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setSelectedItemId(id);
+    }
+  };
 
   return (
     <main className={styles.shell}>
@@ -300,7 +295,15 @@ export default function ManagementDashboard() {
 
                       <div className={styles.cardList}>
                         {columnItems.map((item) => (
-                          <article className={styles.workCard} key={item.id}>
+                          <article
+                            className={styles.workCard}
+                            key={item.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Open ${item.id}: ${item.title}`}
+                            onClick={() => setSelectedItemId(item.id)}
+                            onKeyDown={(event) => openFromKeyboard(event, item.id)}
+                          >
                             <div className={styles.cardTopline}>
                               <span>{item.id}</span>
                               <span className={`${styles.health} ${styles[item.health]}`}>
@@ -338,72 +341,121 @@ export default function ManagementDashboard() {
               </div>
             ) : (
               <section className={styles.gantt} id="schedule" aria-label="Engineering schedule">
-                <div className={styles.ganttLegend}>
-                  <span><i className={styles.legendTrack} /> On track</span>
-                  <span><i className={styles.legendRisk} /> At risk</span>
-                  <span><i className={styles.legendBlocked} /> Blocked</span>
-                  <b>24 Aug – 20 Sep 2026</b>
-                </div>
-
-                <div className={styles.ganttScroll}>
-                  <div className={styles.ganttTable}>
-                    <div className={styles.ganttHead}>
-                      <div className={styles.workHead}>
-                        <span>Work item</span>
-                        <small>Owner and team</small>
-                      </div>
-                      <div className={styles.timelineHead}>
-                        {timelineWeeks.map((week) => (
-                          <span key={week.label}>
-                            <strong>{week.label}</strong>
-                            <small>{week.sublabel}</small>
-                          </span>
-                        ))}
-                      </div>
+                {timeline ? (
+                  <>
+                    <div className={styles.ganttLegend}>
+                      <span><i className={styles.legendTrack} /> On track</span>
+                      <span><i className={styles.legendRisk} /> At risk</span>
+                      <span><i className={styles.legendBlocked} /> Blocked</span>
+                      <b>{timeline.rangeLabel}</b>
                     </div>
 
-                    <div className={styles.todayLabel}>Today · 28 Aug</div>
-
-                    {filteredItems
-                      .slice()
-                      .sort((first, second) => first.due.localeCompare(second.due))
-                      .map((item) => (
-                        <article className={styles.ganttRow} key={item.id}>
-                          <div className={styles.ganttWork}>
-                            <div>
-                              <span>{item.id}</span>
-                              <h4>{item.title}</h4>
-                            </div>
-                            <p>
-                              <strong>{item.owner}</strong>
-                              <small>{item.team}</small>
-                            </p>
+                    <div className={styles.ganttScroll}>
+                      <div className={styles.ganttTable} style={{ minWidth: `${310 + timeline.days * 30}px` }}>
+                        <div className={styles.ganttHead}>
+                          <div className={styles.workHead}>
+                            <span>Work item</span>
+                            <small>Owner and team</small>
                           </div>
-                          <div className={styles.ganttTrack}>
-                            <span className={styles.todayLine} aria-hidden="true" />
-                            <div
-                              className={`${styles.ganttBar} ${styles[item.health]}`}
-                              style={ganttPosition(item)}
-                              title={`${item.id}: ${item.start} to ${item.due}`}
-                            >
-                              <i style={{ width: `${item.progress}%` }} />
-                              <b>{item.id}</b>
-                              <small>{item.progress}%</small>
-                            </div>
+                          <div
+                            className={styles.timelineHead}
+                            style={{ gridTemplateColumns: `repeat(${timeline.days}, minmax(30px, 1fr))` }}
+                          >
+                            {timeline.weeks.map((week) => (
+                              <span
+                                key={week.key}
+                                style={{ gridColumn: `${week.startIndex + 1} / span ${week.span}` }}
+                              >
+                                <strong>{week.label}</strong>
+                                <small>{week.sublabel}</small>
+                              </span>
+                            ))}
                           </div>
-                        </article>
-                      ))}
+                        </div>
 
-                    {filteredItems.length === 0 ? (
-                      <p className={styles.ganttEmpty}>No work matches these filters.</p>
-                    ) : null}
-                  </div>
-                </div>
+                        <div
+                          className={styles.todayLabel}
+                          style={{ left: `calc(310px + (100% - 310px) * ${(timeline.todayIndex + 0.5) / timeline.days})` }}
+                        >
+                          Today · {new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(now!)}
+                        </div>
+
+                        {filteredItems
+                          .slice()
+                          .sort((first, second) => first.due.localeCompare(second.due))
+                          .map((item) => {
+                            const position = timelinePosition(item, timeline);
+                            return (
+                              <article
+                                className={styles.ganttRow}
+                                key={item.id}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Open ${item.id}: ${item.title}`}
+                                onClick={() => setSelectedItemId(item.id)}
+                                onKeyDown={(event) => openFromKeyboard(event, item.id)}
+                              >
+                                <div className={styles.ganttWork}>
+                                  <div>
+                                    <span>{item.id}</span>
+                                    <h4>{item.title}</h4>
+                                  </div>
+                                  <p>
+                                    <strong>{item.owner}</strong>
+                                    <small>{item.team}</small>
+                                  </p>
+                                </div>
+                                <div
+                                  className={styles.ganttTrack}
+                                  style={{
+                                    gridTemplateColumns: `repeat(${timeline.days}, minmax(30px, 1fr))`,
+                                    backgroundSize: `${100 / timeline.days}% 100%`,
+                                  }}
+                                >
+                                  <span
+                                    className={styles.todayLine}
+                                    style={{ left: `${(timeline.todayIndex + 0.5) / timeline.days * 100}%` }}
+                                    aria-hidden="true"
+                                  />
+                                  {position ? (
+                                    <div
+                                      className={`${styles.ganttBar} ${styles[item.health]}`}
+                                      style={{ gridColumn: position.gridColumn }}
+                                      title={`${item.id}: ${item.start} to ${item.due}`}
+                                    >
+                                      <i style={{ width: `${item.progress}%` }} />
+                                      <b>{item.id}</b>
+                                      <small>{item.progress}%</small>
+                                    </div>
+                                  ) : (
+                                    <span className={styles.scheduleUnavailable}>Dates unavailable</span>
+                                  )}
+                                </div>
+                              </article>
+                            );
+                          })}
+
+                        {filteredItems.length === 0 ? (
+                          <p className={styles.ganttEmpty}>No work matches these filters.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </>
+                ) : <p className={styles.ganttEmpty}>Preparing the current schedule…</p>}
               </section>
             )}
           </section>
         </div>
       </section>
+      <WorkItemDetail
+        key={selectedItem?.id ?? 'closed'}
+        item={selectedItem}
+        onClose={closeDetail}
+        onUpdate={saveUpdate}
+        canUpdateStatus
+        canUpdateChecklist={() => true}
+        allowAllChecklistStatuses
+      />
     </main>
   );
 }
