@@ -1,0 +1,96 @@
+name: tracker
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    stop_grace_period: 60s
+    shm_size: 128m
+    mem_limit: 1g
+    environment:
+      POSTGRES_USER: tracker
+      POSTGRES_DB: tracker
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --data-checksums
+      TRACKER_USB_UUID: ${TRACKER_USB_UUID:?Set TRACKER_USB_UUID in infra/docker/pi/.env}
+    secrets:
+      - postgres_password
+    entrypoint: ["/bin/sh", "/run/tracker/verify-usb.sh"]
+    volumes:
+      - type: bind
+        source: /srv/tracker-data/tracker/postgres
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /srv/tracker-data/tracker/.tracker-usb-uuid
+        target: /run/tracker/volume-id
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /proc/1/mountinfo
+        target: /run/tracker/host-mountinfo
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./verify-usb.sh
+        target: /run/tracker/verify-usb.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    command: ["postgres", "-c", "max_connections=20", "-c", "shared_buffers=128MB", "-c", "work_mem=4MB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U tracker -d tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - database
+
+  web:
+    build:
+      context: ../../..
+      dockerfile: infra/docker/pi/Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 2g
+    init: true
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: tracker
+      DATABASE_USER: tracker
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      DATABASE_POOL_MAX: "5"
+      NEXT_PUBLIC_APP_URL: http://localhost:5173
+    secrets:
+      - postgres_password
+    tmpfs:
+      - /run/tracker:size=64k,mode=0711
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5173:5173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - database
+      - web
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+networks:
+  database:
+    internal: true
+  web: {}

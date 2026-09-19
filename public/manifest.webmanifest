@@ -1,0 +1,35 @@
+{
+  "name": "Vector Work — Cosmicport Engineering",
+  "short_name": "Vector Work",
+  "description": "Create and track launch-vehicle engineering work from the field.",
+  "id": "/mobile",
+  "start_url": "/mobile",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait-primary",
+  "background_color": "#f3f7f5",
+  "theme_color": "#071713",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/vector-work-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vector-work-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open engineering workspace",
+      "short_name": "My work",
+      "url": "/mobile"
+    }
+  ]
+}

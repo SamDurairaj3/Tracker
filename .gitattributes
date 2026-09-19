@@ -1,0 +1,13 @@
+* text=auto
+
+# Linux and container entrypoints must retain Unix line endings on Windows.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Binary web assets must never be line-ending normalized.
+*.png binary
+*.ico binary
+*.woff binary
+*.woff2 binary

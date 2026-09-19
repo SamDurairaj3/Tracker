@@ -1,0 +1,2 @@
+# Put the UUID from findmnt here, then save this file as .env on the Pi.
+TRACKER_USB_UUID=replace-with-mounted-ext4-filesystem-uuid
