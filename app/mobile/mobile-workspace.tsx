@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
 import {
-  ENGINEERS,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
@@ -106,7 +105,13 @@ function progressCopy(item: WorkItem) {
   return `${item.progress}% complete`;
 }
 
-export default function MobileWorkspace({ currentUserName }: { currentUserName: string }) {
+export default function MobileWorkspace({
+  currentUserName,
+  activeUserNames,
+}: {
+  currentUserName: string;
+  activeUserNames: string[];
+}) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -126,8 +131,8 @@ export default function MobileWorkspace({ currentUserName }: { currentUserName: 
   const now = useLiveNow();
   const draftHydrated = useRef(false);
   const people = useMemo(
-    () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
-    [currentUserName],
+    () => [currentUserName, ...activeUserNames.filter((name) => name !== currentUserName)],
+    [activeUserNames, currentUserName],
   );
   const initials = currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const firstName = currentUserName.split(/\s+/)[0];

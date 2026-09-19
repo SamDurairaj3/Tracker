@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import AccountBar from '../components/account-bar';
+import { listActiveUserNames } from '../../db/auth-users';
 import { requireIdentity } from '../../lib/auth-session';
 import EngineeringWorkspace from './engineering-workspace';
 
@@ -13,5 +14,6 @@ export const metadata: Metadata = {
 
 export default async function EngineeringPage() {
   const identity = await requireIdentity('/engineering');
-  return <><AccountBar identity={identity} /><EngineeringWorkspace currentUserName={identity.name} canManage={identity.role === 'admin'} /></>;
+  const activeUserNames = await listActiveUserNames();
+  return <><AccountBar identity={identity} /><EngineeringWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} /></>;
 }

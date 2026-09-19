@@ -9,7 +9,6 @@ import {
   useState,
 } from 'react';
 import {
-  ENGINEERS,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
@@ -96,9 +95,11 @@ function dueTone(item: WorkItem, today: string) {
 
 export default function EngineeringWorkspace({
   currentUserName,
+  activeUserNames,
   canManage,
 }: {
   currentUserName: string;
+  activeUserNames: string[];
   canManage: boolean;
 }) {
   const [items, setItems] = useState<WorkItem[]>([]);
@@ -113,8 +114,8 @@ export default function EngineeringWorkspace({
   const [selectedItemId, setSelectedItemId] = useState('');
   const now = useLiveNow();
   const people = useMemo(
-    () => [currentUserName, ...ENGINEERS.filter((name) => name !== currentUserName)],
-    [currentUserName],
+    () => [currentUserName, ...activeUserNames.filter((name) => name !== currentUserName)],
+    [activeUserNames, currentUserName],
   );
   const initials = currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const firstName = currentUserName.split(/\s+/)[0];

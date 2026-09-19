@@ -102,17 +102,6 @@ export type WorkItemPatch = {
   };
 };
 
-
-export const ENGINEERS = [
-  'Arjun Menon',
-  'Meera Shah',
-  'Vikram Rao',
-  'Riya Das',
-  'Neha Iyer',
-  'Kabir Singh',
-  'Asha Nair',
-] as const;
-
 export const TEAMS = [
   'Propulsion',
   'Ground Systems',
