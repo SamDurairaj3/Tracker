@@ -175,26 +175,68 @@ privileges. Secrets are never placed in the app's environment or in source
 control. The database and web containers have health checks and
 `unless-stopped` restart policies.
 
-## Backups and existing D1 data
+## Backups and restore tests
 
-Before storing important new work, arrange regular database backups to a
-**second device or another machine**, with a restore test. A copy on the same
-USB drive will not survive a drive failure. One manual backup command, from
-the Pi deployment directory, is:
+Run backups from the Pi deployment directory. The destination must be an
+explicit absolute directory outside `/srv/tracker-data`. If your user can run
+Docker without `sudo`, use:
 
 ```sh
-mkdir -p "$HOME/tracker-backups"
-set -o pipefail
-docker compose --env-file .env -f compose.yaml exec -T postgres \
-  pg_dump -U tracker -d tracker -Fc \
-  > "$HOME/tracker-backups/tracker-$(date -u +%Y%m%dT%H%M%SZ).dump"
+sh ./backup.sh /home/<pi-user>/tracker-backups
+sh ./test-restore.sh /home/<pi-user>/tracker-backups/<printed-backup-name>.dump
 ```
 
-Copy the resulting archive off the Pi and verify that it can be restored into
-a separate test database. Also keep a secure copy of the password file. The
-Pi's microSD backup directory above is a temporary staging location, not the
-only backup location. Do not use `docker compose down -v` or delete the USB
-data directory during normal updates.
+If Docker access requires `sudo`, use the same paths with:
+
+```sh
+sudo sh ./backup.sh /home/<pi-user>/tracker-backups
+sudo sh ./test-restore.sh /home/<pi-user>/tracker-backups/<printed-backup-name>.dump
+```
+
+Replace `<pi-user>` and use the exact dump path printed by `backup.sh`. Files
+created through `sudo` are returned to the invoking user's UID and GID. Backup
+archives and checksum files use mode `0600`.
+
+A directory under `/home` is useful as temporary microSD staging, but it is not
+protection against loss of the Pi. Copy each `.dump` and its `.sha256` companion
+to a NAS, another computer, or a second removable device. You can also pass an
+already-mounted NAS or second-device directory directly, for example:
+
+```sh
+findmnt --mountpoint /mnt/tracker-backups
+sudo sh ./backup.sh /mnt/tracker-backups
+```
+
+Verify that the intended destination device is mounted before running the
+backup. The script refuses `/srv/tracker-data` and all directories beneath it,
+because a backup beside the live PostgreSQL files would be lost with the same
+USB drive.
+
+`backup.sh` checks the configured USB UUID, deployment marker, password file,
+Compose configuration, and PostgreSQL readiness. It writes a custom-format
+`pg_dump` archive inside the PostgreSQL container with ownership and ACL data
+removed and a 30-second lock timeout. It validates that archive with
+`pg_restore --list`, copies it to a hidden partial file on the destination,
+calculates SHA-256, and renames both files into place. The checksum companion
+contains only the dump basename, so the pair can be moved together. Container
+and partial files are removed after success or failure. This avoids streaming
+`pg_dump` through `docker compose exec`, which hung on this Pi during the
+manual recovery procedure.
+
+`test-restore.sh` checks the optional adjacent `.sha256` companion, validates
+the archive, and restores it into a uniquely named temporary database. It
+requires the Tracker migration, work-item, checklist, and counter tables,
+prints their restored row counts, and requires zero orphan checklist steps.
+The temporary database and container archive are removed after success or
+failure. The live `tracker` database is never a restore target and is not
+modified by this test.
+
+Keep a secure copy of `infra/docker/pi/secrets/postgres_password.txt` alongside
+your off-device backups. Replacing that file does not rotate the existing
+PostgreSQL user's password. Do not use `docker compose down -v` or delete the
+USB data directory during normal updates.
+
+## Existing D1 data
 
 The previous D1 database is untouched. Before cutting over real work, decide
 which D1 data is authoritative, export and back it up, classify any demo
@@ -204,13 +246,14 @@ records and checklist links before choosing it for production. The detailed
 remains open. The old Cloudflare/Sites build is not the runtime for these
 containers.
 
-This Step 2 implementation has not been run on the user's Pi; the drive mount,
-ARM64 image build, restore test, and D1 migration must be validated there.
+The base Pi deployment and a manual backup/restore recovery have been exercised
+on the user's Pi. The new repeatable backup scripts and an off-device restore
+test still need to be run there; D1 migration also remains open.
 On the development computer, Docker Compose v5.5.0 accepted `compose.yaml`,
 including the private database network, exact USB bind, and loopback-only web
 port. The app production build, lint, type checks, 20 local tests, and source
-archive verification passed. No Docker daemon is installed on that computer,
-so an actual container build and runtime check are still pending on the Pi.
+archive verification passed. Docker Desktop is installed there, but its daemon
+was not running during this check; container runtime validation remains Pi-side.
 
 Compose choices follow [Docker's bind-mount guidance](https://docs.docker.com/reference/compose-file/services/#volumes),
 [startup ordering](https://docs.docker.com/compose/how-tos/startup-order/), and
