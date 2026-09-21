@@ -129,6 +129,9 @@ export default function ManagementDashboard() {
           <a className={styles.navActive} href="#delivery" aria-current="page">
             <span aria-hidden="true">◆</span> Delivery overview
           </a>
+          <Link href="/management/users">
+            <span aria-hidden="true">+</span> User management
+          </Link>
           <a href="#all-work">
             <span aria-hidden="true">▦</span> All work
           </a>

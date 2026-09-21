@@ -3,8 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { hashPassword } from 'better-auth/crypto';
 import type { Queryable } from '../db/database';
 import { closeDatabase, database } from '../db/postgres';
-import { createProvisioningAuth, getAuth } from '../lib/auth';
+import { getAuth } from '../lib/auth';
 import { AUTH_ROLES, type AuthRole } from '../lib/auth-config';
+import { createUserManagementService } from '../db/user-management';
 
 type Command = 'create' | 'list' | 'disable' | 'enable' | 'reset-password' | 'verify-login';
 type Parsed = {
@@ -50,7 +51,7 @@ export function parseAuthAdminArgs(args: string[]): Parsed {
     throw new Error('A valid --email address is required.');
   }
   if (command === 'create') {
-    const name = options.get('--name')?.trim();
+    const name = options.get('--name')?.trim().replace(/\s+/g, ' ');
     const role = options.get('--role') as AuthRole | undefined;
     if (!name || name.length > 120) throw new Error('A display name between 1 and 120 characters is required.');
     if (!role || !AUTH_ROLES.includes(role)) throw new Error('--role must be admin or engineer.');
@@ -145,15 +146,13 @@ async function findUser(email: string, client: Queryable = database()) {
 
 async function createUser(parsed: Parsed) {
   const password = await readPassword(true);
-  const result = await createProvisioningAuth().api.createUser({
-    body: {
-      email: parsed.email!,
-      password,
-      name: parsed.name!,
-      role: parsed.role!,
-    },
+  const result = await createUserManagementService(database()).createUser({
+    email: parsed.email!,
+    password,
+    name: parsed.name!,
+    role: parsed.role!,
   });
-  process.stdout.write(`Created ${result.user.email} as ${result.user.role}.\n`);
+  process.stdout.write(`Created ${result.email} as ${result.role}.\n`);
 }
 
 async function listUsers() {
@@ -215,8 +214,8 @@ async function resetPassword(email: string) {
       await client.query(
         `INSERT INTO auth_accounts
           (id, account_id, provider_id, user_id, password, created_at, updated_at)
-         VALUES ($1, $2, 'credential', $2, $3, now(), now())`,
-        [randomUUID(), user.id, passwordHash],
+         VALUES ($1, $2, 'credential', $3, $4, now(), now())`,
+        [randomUUID(), user.id, user.id, passwordHash],
       );
     }
     await client.query('DELETE FROM auth_sessions WHERE user_id = $1', [user.id]);

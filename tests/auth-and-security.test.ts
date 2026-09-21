@@ -79,6 +79,7 @@ test('role parsing and post-login destinations fail closed', () => {
   assert.equal(parseAuthRole('viewer'), null);
   assert.equal(safeNextPath('https://example.com', 'engineer'), '/engineering');
   assert.equal(safeNextPath('/management', 'admin'), '/management');
+  assert.equal(safeNextPath('/management/users', 'admin'), '/management/users');
 });
 
 test('work-item API rejects anonymous and unauthorized callers before storage', async () => {
@@ -158,6 +159,10 @@ test('provisioning CLI refuses password arguments and validates roles', () => {
     command: 'disable',
     email: 'a@example.com',
   });
+  assert.deepEqual(
+    parseAuthAdminArgs(['create', '--email', 'A@Example.com', '--name', '  Asha   Nair  ', '--role', 'engineer']),
+    { command: 'create', email: 'a@example.com', name: 'Asha Nair', role: 'engineer' },
+  );
 });
 
 test('service worker never caches protected HTML or API responses', () => {

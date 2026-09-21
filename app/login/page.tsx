@@ -16,9 +16,9 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; reason?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, reason } = await searchParams;
   const identity = await currentIdentity();
   if (identity) redirect(safeNextPath(next, identity.role));
 
@@ -40,7 +40,13 @@ export default async function LoginPage({
           <h2 id="login-title">Welcome back</h2>
           <p>Use the account provided by your Tracker administrator.</p>
         </div>
-        <LoginForm nextPath={next === '/mobile' || next === '/management' || next === '/engineering' ? next : '/'} />
+        {reason === 'account-updated' ? (
+          <p className={styles.notice} role="status">
+            Your account was updated and its sessions were revoked. Sign in again with the current credentials.
+          </p>
+        ) : null}
+        <LoginForm nextPath={next === '/mobile' || next === '/management' ||
+          next === '/management/users' || next === '/engineering' ? next : '/'} />
         <p className={styles.help}>
           Need access or a password reset? Contact an administrator. Email recovery
           is not enabled for this pilot.

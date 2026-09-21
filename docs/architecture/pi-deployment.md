@@ -97,8 +97,9 @@ curl -fsS http://127.0.0.1:5173/api/health
 ```
 
 `deploy.sh` verifies the USB and both secret files, validates Compose, builds
-the ARM64 image, starts PostgreSQL, applies the checksummed SQL migrations, and
-starts the web app. Migration `0002_better_auth.sql` creates the Better Auth
+the ARM64 image with the normal Docker layer cache, starts PostgreSQL, applies
+the checksummed SQL migrations, and starts the web app. Do not add `--no-cache`
+for a normal update. Migration `0002_better_auth.sql` creates the Better Auth
 user, account, session, verification, admin-role, and database rate-limit
 schema. Runtime requests validate the schema but never mutate it. A healthy
 response is `{"status":"ok"}` and contains no database details.
@@ -134,7 +135,17 @@ Passwords are never accepted as command-line arguments, environment variables,
 logs, or source. Better Auth hashes them with its default scrypt implementation.
 Use at least 12 characters.
 
-Create engineers the same way with `--role engineer`. Manage accounts with:
+After the first administrator signs in, `/management/users` is the normal
+account-management portal. It creates administrators or engineers, edits
+identity and role, resets passwords, and disables or re-enables access without
+deleting historical attribution. Exact work ownership and checklist assignments
+follow a display-name change. Password, identity, and role changes revoke that
+user's sessions; disabling revokes sessions immediately. The portal prevents
+self-disable and protects the last active administrator.
+
+The CLI remains the local recovery path if no administrator can reach the
+portal. Create engineers the same way with `--role engineer`, or manage and
+recover accounts with:
 
 ```sh
 docker compose --env-file .env -f compose.yaml run --rm --no-deps web \

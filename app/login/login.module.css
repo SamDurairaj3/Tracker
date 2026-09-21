@@ -89,6 +89,7 @@
 .form button:hover { background: #085640; }
 .form button:disabled { cursor: wait; opacity: 0.68; }
 .error { margin: -4px 0 0; border-radius: 10px; background: #fee2e2; color: #991b1b; padding: 11px 13px; font-size: 13px; line-height: 1.5; }
+.notice { margin: 22px 0 -16px; border: 1px solid #a5d6c1; border-radius: 10px; background: #e8f7f0; color: #155c43; padding: 11px 13px; font-size: 13px; line-height: 1.5; }
 .help { margin: 26px 0 0; color: #64746e; font-size: 13px; line-height: 1.6; }
 
 @media (max-width: 820px) {

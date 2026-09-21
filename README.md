@@ -58,10 +58,13 @@ See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) fo
 | Route | Audience | Purpose |
 |---|---|---|
 | `/management` | Administrators | Organization-wide work visibility with Kanban and Gantt views |
+| `/management/users` | Administrators | Create, edit, disable, re-enable, and reset invited accounts |
 | `/engineering` | Invited administrators and engineers | Create owned work, update its workflow, and complete assigned actions |
 | `/mobile` | Invited administrators and engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
 
-Unauthenticated requests go to `/login`. After sign-in, the root route sends administrators to `/management` and engineers to `/engineering`; engineers cannot open `/management`. Every work-item API operation also requires an active administrator or engineer session. All three surfaces use the same work-item API, so engineer-created work is included in management totals, Kanban columns, filters, and the Gantt schedule.
+Unauthenticated requests go to `/login`. After sign-in, the root route sends administrators to `/management` and engineers to `/engineering`; engineers cannot open management routes. Every work-item API operation also requires an active administrator or engineer session. All three work surfaces use the same work-item API, so engineer-created work is included in management totals, Kanban columns, filters, and the Gantt schedule.
+
+Administrators manage invite-only accounts at `/management/users`. The portal creates credential accounts, edits names, emails, and roles, resets passwords, and disables or re-enables access without deleting attribution history. Renames update exact owner, creator, and checklist-assignee references in one transaction. Session-revoking changes require the affected administrator to sign in again. The local `auth:admin` CLI remains the recovery path when no administrator can use the portal.
 
 ### Mobile PWA
 

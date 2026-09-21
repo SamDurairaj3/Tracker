@@ -53,7 +53,8 @@ export function isAdmin(identity: Pick<AuthIdentity, 'role'>) {
 
 export function safeNextPath(value: string | null | undefined, role: AuthRole) {
   const fallback = role === 'admin' ? '/management' : '/engineering';
-  return value === '/management' || value === '/engineering' || value === '/mobile'
+  return value === '/management' || value === '/management/users' ||
+    value === '/engineering' || value === '/mobile'
     ? value
     : fallback;
 }
