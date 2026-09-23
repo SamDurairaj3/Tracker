@@ -32,10 +32,8 @@ const healthLabels: Record<WorkHealth, string> = {
 };
 
 export default function ManagementDashboard({
-  currentUserName,
   activeUserNames,
 }: {
-  currentUserName: string;
   activeUserNames: string[];
 }) {
   const [view, setView] = useState<ViewMode>('kanban');
@@ -79,7 +77,7 @@ export default function ManagementDashboard({
       active = false;
       window.removeEventListener('focus', refresh);
     };
-  }, [refreshWorkItems]);
+  }, [refreshWorkItems, showArchived]);
 
   const teams = useMemo(
     () => ['All teams', ...Array.from(new Set(workItems.map((item) => item.team)))],

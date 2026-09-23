@@ -16,5 +16,5 @@ export const metadata: Metadata = {
 export default async function ManagementPage() {
   const identity = await requireAdmin('/management');
   const activeUserNames = await listActiveUserNames();
-  return <><AccountBar identity={identity} /><ManagementDashboard currentUserName={identity.name} activeUserNames={activeUserNames} /></>;
+  return <><AccountBar identity={identity} /><ManagementDashboard activeUserNames={activeUserNames} /></>;
 }

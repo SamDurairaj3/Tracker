@@ -106,7 +106,7 @@ export default function WorkItemDetail({
   const [savingKey, setSavingKey] = useState('');
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<WorkItemEditInput | null>(item ? editDraft(item) : null);
+  const [draft, setDraft] = useState<WorkItemEditInput | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState<WorkItemActivity[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -122,23 +122,23 @@ export default function WorkItemDetail({
     const previous = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !savingKey) onClose();
-    };
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', closeOnEscape);
     closeButton.current?.focus();
     return () => {
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
       previous?.focus();
     };
-  }, [itemId, onClose, savingKey]);
+  }, [itemId]);
 
   useEffect(() => {
-    setDraft(item ? editDraft(item) : null);
-  }, [item]);
+    if (!itemId) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !savingKey) onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [itemId, onClose, savingKey]);
 
   if (!item) return null;
 
@@ -189,8 +189,8 @@ export default function WorkItemDetail({
     try {
       setSavingKey('edit');
       setError('');
-      const updated = await onEdit(draft);
-      setDraft(editDraft(updated));
+      await onEdit(draft);
+      setDraft(null);
       setEditing(false);
       if (activityOpen) await loadActivity();
     } catch (editError) {
@@ -206,6 +206,7 @@ export default function WorkItemDetail({
       setError('');
       await onArchive(!item?.archivedAt);
       setEditing(false);
+      setDraft(null);
       setDeleteOpen(false);
       if (activityOpen) await loadActivity();
     } catch (archiveError) {
@@ -295,7 +296,19 @@ export default function WorkItemDetail({
 
           <div className={styles.itemActions} aria-label="Work-item actions">
             {canEdit && !item.archivedAt ? (
-              <button type="button" onClick={() => setEditing((current) => !current)} disabled={Boolean(savingKey)}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editing) {
+                    setEditing(false);
+                    setDraft(null);
+                  } else {
+                    setDraft(editDraft(item));
+                    setEditing(true);
+                  }
+                }}
+                disabled={Boolean(savingKey)}
+              >
                 {editing ? 'Cancel edit' : 'Edit card'}
               </button>
             ) : null}
@@ -449,7 +462,7 @@ export default function WorkItemDetail({
               </section>
               <footer className={styles.editFooter}>
                 <button type="button" onClick={() => {
-                  setDraft(editDraft(item));
+                  setDraft(null);
                   setEditing(false);
                 }} disabled={Boolean(savingKey)}>Cancel</button>
                 <button className={styles.primaryAction} type="submit" disabled={Boolean(savingKey)}>
