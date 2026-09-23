@@ -23,5 +23,5 @@ export const viewport: Viewport = {
 export default async function MobilePage() {
   const identity = await requireIdentity('/mobile');
   const activeUserNames = await listActiveUserNames();
-  return <><AccountBar identity={identity} /><MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} /></>;
+  return <><AccountBar identity={identity} /><MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} /></>;
 }

@@ -10,6 +10,11 @@ type SeedWorkItem = Omit<
   | 'blocker'
   | 'created_at'
   | 'updated_at'
+  | 'archived_at'
+  | 'archived_by_user_id'
+  | 'archived_by_name'
+  | 'activity_count'
+  | 'latest_activity_at'
 > & {
   blocker?: string;
 };

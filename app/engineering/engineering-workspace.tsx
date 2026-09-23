@@ -16,6 +16,7 @@ import {
   type CreateWorkItemInput,
   type ProgressMethod,
   type WorkItem,
+  type WorkItemEditInput,
   type WorkItemPatch,
   type WorkItemType,
   type WorkPriority,
@@ -25,7 +26,10 @@ import { defaultWorkDates, dueCopy, formatLiveDateTime, greetingForHour, localDa
 import { useLiveNow } from '../../lib/use-live-now';
 import {
   createWorkItem,
+  deleteWorkItem,
+  editWorkItem,
   fetchWorkItems,
+  setWorkItemArchived,
   updateWorkItem,
 } from '../../lib/work-items-client';
 import styles from './engineering.module.css';
@@ -112,6 +116,7 @@ export default function EngineeringWorkspace({
   const [updatingId, setUpdatingId] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const now = useLiveNow();
   const people = useMemo(
     () => [currentUserName, ...activeUserNames.filter((name) => name !== currentUserName)],
@@ -131,7 +136,7 @@ export default function EngineeringWorkspace({
 
   useEffect(() => {
     let active = true;
-    void fetchWorkItems()
+    void fetchWorkItems(showArchived)
       .then((workItems) => {
         if (!active) return;
         setItems(workItems);
@@ -147,7 +152,7 @@ export default function EngineeringWorkspace({
     return () => {
       active = false;
     };
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     if (!showCreate) return;
@@ -158,25 +163,35 @@ export default function EngineeringWorkspace({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [saving, showCreate]);
 
+  const activeItems = useMemo(
+    () => items.filter((item) => !item.archivedAt),
+    [items],
+  );
   const ownedWork = useMemo(
-    () => items.filter((item) => item.owner === currentUserName),
-    [currentUserName, items],
+    () => items.filter((item) => item.owner === currentUserName || (
+      showArchived && Boolean(item.archivedAt) && item.createdBy === currentUserName
+    )),
+    [currentUserName, items, showArchived],
+  );
+  const activeOwnedWork = useMemo(
+    () => activeItems.filter((item) => item.owner === currentUserName),
+    [activeItems, currentUserName],
   );
 
   const assignedActions = useMemo(
     () =>
-      items.flatMap((item) =>
+      activeItems.flatMap((item) =>
         item.checklist
           .filter(
             (step) => step.assignee === currentUserName && step.status !== 'done',
           )
           .map((step) => ({ item, step })),
       ),
-    [currentUserName, items],
+    [activeItems, currentUserName],
   );
 
-  const blockedCount = ownedWork.filter((item) => item.health === 'blocked').length;
-  const reviewCount = ownedWork.filter((item) => item.status === 'review').length;
+  const blockedCount = activeOwnedWork.filter((item) => item.health === 'blocked').length;
+  const reviewCount = activeOwnedWork.filter((item) => item.status === 'review').length;
 
   function openCreateDialog() {
     setForm(createEmptyForm(currentUserName, new Date()));
@@ -258,6 +273,33 @@ export default function EngineeringWorkspace({
     );
     setNotice(`${updated.id} was updated.`);
     return updated;
+  }
+  async function saveDetailEdit(input: WorkItemEditInput) {
+    const updated = await editWorkItem(input);
+    setItems((current) =>
+      current.map((candidate) => candidate.id === updated.id ? updated : candidate),
+    );
+    setNotice(`${updated.id} was edited.`);
+    return updated;
+  }
+
+  async function changeSelectedArchive(archived: boolean) {
+    if (!selectedItemId) throw new Error('No work item is selected.');
+    const updated = await setWorkItemArchived(selectedItemId, archived);
+    setItems((current) => showArchived
+      ? current.map((candidate) => candidate.id === updated.id ? updated : candidate)
+      : current.filter((candidate) => candidate.id !== updated.id));
+    setNotice(`${updated.id} was ${archived ? 'archived' : 'restored'}.`);
+    if (archived && !showArchived) setSelectedItemId('');
+    return updated;
+  }
+
+  async function deleteSelected(confirmation: string) {
+    if (!selectedItemId) return;
+    await deleteWorkItem(selectedItemId, confirmation);
+    setItems((current) => current.filter((candidate) => candidate.id !== selectedItemId));
+    setNotice(`${selectedItemId} was permanently deleted.`);
+    setSelectedItemId('');
   }
 
   async function toggleChecklistStep(
@@ -354,10 +396,19 @@ export default function EngineeringWorkspace({
             </div>
           ) : null}
 
+          <label className={styles.archiveToggle}>
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+            Show archived work
+          </label>
+
           <section className={styles.metrics} aria-label="Personal work summary">
             <article>
               <span>Owned work</span>
-              <strong>{ownedWork.length}</strong>
+              <strong>{activeOwnedWork.length}</strong>
               <small>Results you are accountable for</small>
             </article>
             <article>
@@ -395,7 +446,7 @@ export default function EngineeringWorkspace({
                 {ownedWork.map((item) => {
                   const completedSteps = item.checklist.filter((step) => step.status === 'done').length;
                   return (
-                    <article className={styles.workCard} key={item.id} id={item.health === 'blocked' ? 'blocked' : undefined}>
+                    <article className={item.archivedAt ? styles.archivedCard : styles.workCard} key={item.id} id={item.health === 'blocked' ? 'blocked' : undefined}>
                       <div
                         className={styles.workCardOpen}
                         role="button"
@@ -405,7 +456,7 @@ export default function EngineeringWorkspace({
                         onKeyDown={(event) => openFromKeyboard(event, item.id)}
                       >
                         <div className={styles.workMeta}>
-                        <span>{item.id}</span>
+                        <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
                         <span className={`${styles.status} ${styles[item.status]}`}>
                           <i aria-hidden="true" /> {STATUS_LABELS[item.status]}
                         </span>
@@ -428,7 +479,7 @@ export default function EngineeringWorkspace({
                       </div>
                       <footer>
                         <span>{item.team} · {item.priority}</span>
-                        {nextStatusLabels[item.status] ? (
+                        {!item.archivedAt && nextStatusLabels[item.status] ? (
                           <button
                             type="button"
                             disabled={updatingId === item.id}
@@ -493,6 +544,32 @@ export default function EngineeringWorkspace({
               </div>
             </aside>
           </div>
+
+          <section className={styles.sharedWork} aria-labelledby="shared-work-title">
+            <header className={styles.panelHeader}>
+              <div>
+                <span className={styles.eyebrow}>Shared delivery</span>
+                <h3 id="shared-work-title">All work cards</h3>
+              </div>
+              <span className={styles.actionCount}>{items.length}</span>
+            </header>
+            <p className={styles.panelIntro}>Open any active card to read its history or add a comment.</p>
+            <div className={styles.sharedWorkList}>
+              {items.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={item.archivedAt ? styles.sharedArchived : undefined}
+                  onClick={() => setSelectedItemId(item.id)}
+                >
+                  <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.owner} · {item.team} · {STATUS_LABELS[item.status]}</small>
+                </button>
+              ))}
+              {!loading && !items.length ? <p className={styles.emptyState}>No work cards are available.</p> : null}
+            </div>
+          </section>
         </div>
       </section>
 
@@ -621,10 +698,17 @@ export default function EngineeringWorkspace({
       <WorkItemDetail
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
+        people={people}
         onClose={closeDetail}
         onUpdate={saveDetailUpdate}
-        canUpdateStatus={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName))}
-        canUpdateChecklist={(step) => canManage || step.assignee === currentUserName}
+        onEdit={saveDetailEdit}
+        onArchive={changeSelectedArchive}
+        onDelete={deleteSelected}
+        canUpdateStatus={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
+        canUpdateChecklist={(step) => Boolean(selectedItem && !selectedItem.archivedAt && (canManage || step.assignee === currentUserName))}
+        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canDelete={Boolean(canManage && selectedItem?.archivedAt)}
         allowAllChecklistStatuses={canManage}
       />
     </main>

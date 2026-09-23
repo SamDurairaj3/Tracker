@@ -5,8 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
 import { buildTimeline, timelinePosition } from '../../lib/work-schedule';
 import { useLiveNow } from '../../lib/use-live-now';
-import { fetchWorkItems, updateWorkItem } from '../../lib/work-items-client';
-import type { WorkHealth, WorkItem, WorkItemPatch, WorkStatus } from '../../lib/work-items';
+import {
+  deleteWorkItem,
+  editWorkItem,
+  fetchWorkItems,
+  setWorkItemArchived,
+  updateWorkItem,
+} from '../../lib/work-items-client';
+import type { WorkHealth, WorkItem, WorkItemEditInput, WorkItemPatch, WorkStatus } from '../../lib/work-items';
 import styles from './management.module.css';
 
 type ViewMode = 'kanban' | 'gantt';
@@ -25,11 +31,18 @@ const healthLabels: Record<WorkHealth, string> = {
   blocked: 'Blocked',
 };
 
-export default function ManagementDashboard() {
+export default function ManagementDashboard({
+  currentUserName,
+  activeUserNames,
+}: {
+  currentUserName: string;
+  activeUserNames: string[];
+}) {
   const [view, setView] = useState<ViewMode>('kanban');
   const [query, setQuery] = useState('');
   const [team, setTeam] = useState('All teams');
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loadError, setLoadError] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
@@ -37,18 +50,18 @@ export default function ManagementDashboard() {
 
   const refreshWorkItems = useCallback(async () => {
     try {
-      setWorkItems(await fetchWorkItems());
+      setWorkItems(await fetchWorkItems(showArchived));
       setLoadError('');
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : 'Work items could not be loaded.',
       );
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     let active = true;
-    void fetchWorkItems()
+    void fetchWorkItems(showArchived)
       .then((items) => {
         if (!active) return;
         setWorkItems(items);
@@ -89,10 +102,11 @@ export default function ManagementDashboard() {
     });
   }, [attentionOnly, query, team, workItems]);
 
-  const activeCount = workItems.filter((item) => item.status === 'active').length;
-  const blockedCount = workItems.filter((item) => item.health === 'blocked').length;
-  const reviewCount = workItems.filter((item) => item.status === 'review').length;
-  const atRiskCount = workItems.filter((item) => item.health === 'at-risk').length;
+  const currentItems = workItems.filter((item) => !item.archivedAt);
+  const activeCount = currentItems.filter((item) => item.status === 'active').length;
+  const blockedCount = currentItems.filter((item) => item.health === 'blocked').length;
+  const reviewCount = currentItems.filter((item) => item.status === 'review').length;
+  const atRiskCount = currentItems.filter((item) => item.health === 'at-risk').length;
   const selectedItem = workItems.find((item) => item.id === selectedItemId) ?? null;
   const timeline = useMemo(
     () => now ? buildTimeline(filteredItems, now) : null,
@@ -104,6 +118,26 @@ export default function ManagementDashboard() {
     setWorkItems((current) => current.map((item) => item.id === updated.id ? updated : item));
     return updated;
   }, []);
+  const saveEdit = useCallback(async (input: WorkItemEditInput) => {
+    const updated = await editWorkItem(input);
+    setWorkItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+    return updated;
+  }, []);
+  const changeArchive = useCallback(async (archived: boolean) => {
+    if (!selectedItemId) throw new Error('No work item is selected.');
+    const updated = await setWorkItemArchived(selectedItemId, archived);
+    setWorkItems((current) => showArchived
+      ? current.map((item) => item.id === updated.id ? updated : item)
+      : current.filter((item) => item.id !== updated.id));
+    if (archived && !showArchived) setSelectedItemId('');
+    return updated;
+  }, [selectedItemId, showArchived]);
+  const removeSelected = useCallback(async (confirmation: string) => {
+    if (!selectedItemId) return;
+    await deleteWorkItem(selectedItemId, confirmation);
+    setWorkItems((current) => current.filter((item) => item.id !== selectedItemId));
+    setSelectedItemId('');
+  }, [selectedItemId]);
   const openFromKeyboard = (event: React.KeyboardEvent, id: string) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -197,8 +231,8 @@ export default function ManagementDashboard() {
           <section className={styles.metrics} aria-label="Delivery summary">
             <article>
               <span>Total work items</span>
-              <strong>{workItems.length}</strong>
-              <small>Across {teams.length - 1} engineering teams</small>
+              <strong>{currentItems.length}</strong>
+              <small>Across {new Set(currentItems.map((item) => item.team)).size} engineering teams</small>
             </article>
             <article>
               <span>Active execution</span>
@@ -275,6 +309,16 @@ export default function ManagementDashboard() {
                 Attention only
               </label>
 
+              <label className={styles.attentionToggle}>
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(event) => setShowArchived(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+                Show archived
+              </label>
+
               <span className={styles.resultCount}>{filteredItems.length} items shown</span>
             </div>
 
@@ -299,7 +343,7 @@ export default function ManagementDashboard() {
                       <div className={styles.cardList}>
                         {columnItems.map((item) => (
                           <article
-                            className={styles.workCard}
+                            className={item.archivedAt ? styles.archivedCard : styles.workCard}
                             key={item.id}
                             role="button"
                             tabIndex={0}
@@ -308,7 +352,7 @@ export default function ManagementDashboard() {
                             onKeyDown={(event) => openFromKeyboard(event, item.id)}
                           >
                             <div className={styles.cardTopline}>
-                              <span>{item.id}</span>
+                              <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
                               <span className={`${styles.health} ${styles[item.health]}`}>
                                 <i aria-hidden="true" /> {healthLabels[item.health]}
                               </span>
@@ -400,7 +444,7 @@ export default function ManagementDashboard() {
                               >
                                 <div className={styles.ganttWork}>
                                   <div>
-                                    <span>{item.id}</span>
+                                    <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
                                     <h4>{item.title}</h4>
                                   </div>
                                   <p>
@@ -453,10 +497,17 @@ export default function ManagementDashboard() {
       <WorkItemDetail
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
+        people={activeUserNames}
         onClose={closeDetail}
         onUpdate={saveUpdate}
-        canUpdateStatus
-        canUpdateChecklist={() => true}
+        onEdit={saveEdit}
+        onArchive={changeArchive}
+        onDelete={removeSelected}
+        canUpdateStatus={Boolean(selectedItem && !selectedItem.archivedAt)}
+        canUpdateChecklist={() => Boolean(selectedItem && !selectedItem.archivedAt)}
+        canEdit={Boolean(selectedItem && !selectedItem.archivedAt)}
+        canArchive={Boolean(selectedItem)}
+        canDelete={Boolean(selectedItem?.archivedAt)}
         allowAllChecklistStatuses
       />
     </main>

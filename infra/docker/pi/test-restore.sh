@@ -107,20 +107,25 @@ compose exec -T postgres pg_restore \
   "$container_archive"
 
 required_count=$(compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name IN ('tracker_schema_migrations', 'work_items', 'checklist_steps', 'work_item_counters');")
-[ "$required_count" = 4 ] || fail 'one or more required Tracker tables are missing'
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name IN ('tracker_schema_migrations', 'work_items', 'checklist_steps', 'work_item_counters', 'work_item_activity');")
+[ "$required_count" = 5 ] || fail 'one or more required Tracker tables are missing'
 
 echo 'Restored row counts:'
 compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
   "SELECT 'tracker_schema_migrations=' || count(*) FROM tracker_schema_migrations
    UNION ALL SELECT 'work_items=' || count(*) FROM work_items
    UNION ALL SELECT 'checklist_steps=' || count(*) FROM checklist_steps
-   UNION ALL SELECT 'work_item_counters=' || count(*) FROM work_item_counters;"
+   UNION ALL SELECT 'work_item_counters=' || count(*) FROM work_item_counters
+   UNION ALL SELECT 'work_item_activity=' || count(*) FROM work_item_activity;"
 
 orphan_count=$(compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
   "SELECT count(*) FROM checklist_steps AS step LEFT JOIN work_items AS item ON item.id = step.work_item_id WHERE item.id IS NULL;")
 [ "$orphan_count" = 0 ] || fail "restore contains $orphan_count orphan checklist_steps rows"
 echo 'Orphan checklist_steps: 0'
+
+activity_orphan_count=$(compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c   "SELECT count(*) FROM work_item_activity AS activity LEFT JOIN work_items AS item ON item.id = activity.work_item_id WHERE item.id IS NULL;")
+[ "$activity_orphan_count" = 0 ] || fail "restore contains $activity_orphan_count orphan work_item_activity rows"
+echo 'Orphan work_item_activity: 0'
 
 compose exec -T postgres dropdb --if-exists --force -U tracker "$restore_database"
 database_created=false

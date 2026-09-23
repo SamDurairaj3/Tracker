@@ -41,7 +41,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     });
     after(async () => { await close?.(); });
     beforeEach(async () => {
-      await db.query('TRUNCATE checklist_steps, work_items, work_item_counters');
+      await db.query('TRUNCATE work_item_activity, checklist_steps, work_items, work_item_counters');
     });
 
     it('migrates repeatably without seeding or losing records', async () => {
@@ -52,10 +52,20 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     });
 
     it('detects edited migration history', async () => {
-      const { rows } = await db.query<{ checksum: string }>('SELECT checksum FROM tracker_schema_migrations');
-      await db.query("UPDATE tracker_schema_migrations SET checksum = 'changed'");
+      const migrationName = '0003_work_item_lifecycle.sql';
+      const { rows } = await db.query<{ checksum: string }>(
+        'SELECT checksum FROM tracker_schema_migrations WHERE name = $1',
+        [migrationName],
+      );
+      await db.query(
+        "UPDATE tracker_schema_migrations SET checksum = 'changed' WHERE name = $1",
+        [migrationName],
+      );
       await assert.rejects(migrate(db), /Applied migration was changed/);
-      await db.query('UPDATE tracker_schema_migrations SET checksum = $1', [rows[0].checksum]);
+      await db.query(
+        'UPDATE tracker_schema_migrations SET checksum = $1 WHERE name = $2',
+        [rows[0].checksum, migrationName],
+      );
     });
 
     it('preserves complete JSON contract, trimming, nulls, dates, and checklist ordering', async () => {
@@ -67,6 +77,8 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
         type: 'Task', purpose: 'Test evidence', expectedResult: 'Reviewed result',
         linkedGoal: 'Flight readiness', progressMethod: 'checklist-count', blocker: null,
         createdAt: item.createdAt, updatedAt: item.createdAt,
+        archivedAt: null, archivedByName: null,
+        activityCount: 1, latestActivityAt: item.latestActivityAt,
         checklist: [
           { id: item.checklist[0].id, workItemId: item.id, title: 'Measure', assignee: 'Arjun Menon', status: 'open', weight: 2, position: 0 },
           { id: item.checklist[1].id, workItemId: item.id, title: 'Review', assignee: 'Meera Shah', status: 'open', weight: 1, position: 1 },
@@ -93,6 +105,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
 
     it('uses independent team prefixes and continues imported IDs beyond 999', async () => {
       const first = await repository.insertWorkItem(input);
+      await db.query('DELETE FROM work_item_activity WHERE work_item_id = $1', [first.id]);
       await db.query('DELETE FROM checklist_steps WHERE work_item_id = $1', [first.id]);
       await db.query("UPDATE work_items SET id = 'PROP-1000' WHERE id = $1", [first.id]);
       assert.equal((await repository.insertWorkItem(input)).id, 'PROP-1001');
@@ -146,7 +159,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     it('does not update another card’s step; cascades deletion and rejects orphan steps', async () => {
       const a = await repository.insertWorkItem(input);
       const b = await repository.insertWorkItem(input);
-      await repository.patchWorkItem({ id: a.id, checklistStep: { id: b.checklist[0].id, status: 'done' } });
+      await assert.rejects(repository.patchWorkItem({ id: a.id, checklistStep: { id: b.checklist[0].id, status: 'done' } }), /Checklist action not found/);
       assert.deepEqual(await repository.getWorkItem(b.id), b);
       await db.query('DELETE FROM work_items WHERE id = $1', [a.id]);
       assert.deepEqual((await db.query('SELECT * FROM checklist_steps WHERE work_item_id = $1', [a.id])).rows, []);
@@ -174,7 +187,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     it('preserves HTTP envelopes, validation, status codes, and mutations', async () => {
       const api = createWorkItemHandlers(
         repository,
-        async () => ({ name: 'Authenticated Engineer', role: 'admin' }),
+        async () => ({ id: null, name: 'Authenticated Engineer', role: 'admin' }),
       );
       assert.deepEqual(await (await api.GET(request('GET'))).json(), { items: [] });
       const created = await api.POST(request('POST', input));

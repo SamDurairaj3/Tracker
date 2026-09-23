@@ -1030,3 +1030,17 @@
   .workCard { transition: none; }
 }
 
+
+.archiveToggle { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0 0 0.8rem; color: #60756b; font-size: 0.76rem; font-weight: 800; }
+.archiveToggle input { accent-color: #256c50; }
+.archivedCard { opacity: 0.72; border: 1px dashed #9eaaa4; border-radius: 12px; background: #eef1ef; overflow: hidden; }
+
+.sharedWork { margin-top: 18px; padding: 20px; border: 1px solid #dce5e0; border-radius: 16px; background: white; }
+.sharedWorkList { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+.sharedWorkList button { display: grid; gap: 5px; padding: 12px; border: 1px solid #dce5e0; border-radius: 10px; color: #173d2f; background: #f8faf9; text-align: left; cursor: pointer; }
+.sharedWorkList button:hover { border-color: #8fb4a3; background: #f0f7f3; }
+.sharedWorkList span { color: #5b7468; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.sharedWorkList strong { font-size: 13px; line-height: 1.35; }
+.sharedWorkList small { color: #74867d; font-size: 10px; }
+.sharedWorkList .sharedArchived { opacity: 0.68; border-style: dashed; }
+@media (max-width: 900px) { .sharedWorkList { grid-template-columns: 1fr; } }

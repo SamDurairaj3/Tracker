@@ -1191,3 +1191,7 @@
   stroke-linejoin: round;
   stroke-width: 1.8;
 }
+
+.archiveToggle { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; color: #61756b; font-size: 12px; font-weight: 800; }
+.archiveToggle input { accent-color: #256c50; }
+.archivedCard { opacity: 0.72; border: 1px dashed #9aa8a1; border-radius: 14px; background: #edf1ef; overflow: hidden; }

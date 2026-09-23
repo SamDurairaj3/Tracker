@@ -10,13 +10,21 @@ import {
   type CreateWorkItemInput,
   type ProgressMethod,
   type WorkItem,
+  type WorkItemEditInput,
   type WorkItemPatch,
   type WorkItemType,
   type WorkPriority,
 } from '../../lib/work-items';
 import { calendarDayDifference, defaultWorkDates, formatLiveDateTime, greetingForHour, localDateKey } from '../../lib/local-time';
 import { useLiveNow } from '../../lib/use-live-now';
-import { createWorkItem, fetchWorkItems, updateWorkItem } from '../../lib/work-items-client';
+import {
+  createWorkItem,
+  deleteWorkItem,
+  editWorkItem,
+  fetchWorkItems,
+  setWorkItemArchived,
+  updateWorkItem,
+} from '../../lib/work-items-client';
 import styles from './mobile.module.css';
 
 type HomeView = 'home' | 'work' | 'actions' | 'notifications';
@@ -108,9 +116,11 @@ function progressCopy(item: WorkItem) {
 export default function MobileWorkspace({
   currentUserName,
   activeUserNames,
+  canManage,
 }: {
   currentUserName: string;
   activeUserNames: string[];
+  canManage: boolean;
 }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +138,7 @@ export default function MobileWorkspace({
   const [selectedItemId, setSelectedItemId] = useState('');
   const [updatingActionId, setUpdatingActionId] = useState('');
   const [actionError, setActionError] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const now = useLiveNow();
   const draftHydrated = useRef(false);
   const people = useMemo(
@@ -139,7 +150,7 @@ export default function MobileWorkspace({
 
   useEffect(() => {
     let active = true;
-    void fetchWorkItems()
+    void fetchWorkItems(showArchived)
       .then((workItems) => {
         if (!active) return;
         setItems(workItems);
@@ -155,7 +166,7 @@ export default function MobileWorkspace({
     return () => {
       active = false;
     };
-  }, [currentUserName]);
+  }, [currentUserName, showArchived]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -212,16 +223,20 @@ export default function MobileWorkspace({
     };
   }, [currentUserName]);
 
+  const activeItems = useMemo(
+    () => items.filter((item) => !item.archivedAt),
+    [items],
+  );
   const ownedWork = useMemo(
-    () => items.filter((item) => item.owner === currentUserName && item.status !== 'done'),
-    [currentUserName, items],
+    () => activeItems.filter((item) => item.owner === currentUserName && item.status !== 'done'),
+    [activeItems, currentUserName],
   );
 
   const assignedActions = useMemo(
-    () => items.flatMap((item) => item.checklist
+    () => activeItems.flatMap((item) => item.checklist
       .filter((action) => action.assignee === currentUserName)
       .map((action) => ({ item, action }))),
-    [currentUserName, items],
+    [activeItems, currentUserName],
   );
   const openAssignedActions = useMemo(
     () => assignedActions.filter(({ action }) => action.status !== 'done'),
@@ -298,6 +313,28 @@ export default function MobileWorkspace({
     setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
     return updated;
   }, []);
+  const saveMobileEdit = useCallback(async (input: WorkItemEditInput) => {
+    const updated = await editWorkItem(input);
+    setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+    return updated;
+  }, []);
+
+  async function changeMobileArchive(archived: boolean) {
+    if (!selectedItemId) throw new Error('No work item is selected.');
+    const updated = await setWorkItemArchived(selectedItemId, archived);
+    setItems((current) => showArchived
+      ? current.map((item) => item.id === updated.id ? updated : item)
+      : current.filter((item) => item.id !== updated.id));
+    if (archived && !showArchived) setSelectedItemId('');
+    return updated;
+  }
+
+  async function deleteMobileItem(confirmation: string) {
+    if (!selectedItemId) return;
+    await deleteWorkItem(selectedItemId, confirmation);
+    setItems((current) => current.filter((item) => item.id !== selectedItemId));
+    setSelectedItemId('');
+  }
 
   async function toggleAssignedAction(itemId: string, stepId: string, status: ChecklistStatus) {
     try {
@@ -536,8 +573,16 @@ export default function MobileWorkspace({
 
         {view === 'work' ? (
           <>
-            <ScreenHeading eyebrow="Accountability" title="My owned work" description="Results you are accountable for delivering." />
-            <WorkList items={ownedWork} loading={loading} error={loadError} onOpen={setSelectedItemId} />
+            <ScreenHeading eyebrow="Shared delivery" title="All work" description="Open any active card to follow activity or add context." />
+            <label className={styles.archiveToggle}>
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(event) => setShowArchived(event.target.checked)}
+              />
+              Show archived
+            </label>
+            <WorkList items={items} loading={loading} error={loadError} onOpen={setSelectedItemId} />
           </>
         ) : null}
 
@@ -601,7 +646,7 @@ export default function MobileWorkspace({
 
       <nav className={styles.bottomNav} aria-label="Mobile navigation">
         <button className={view === 'home' ? styles.activeNav : ''} type="button" onClick={() => setView('home')}><span>⌂</span><small>Home</small></button>
-        <button className={view === 'work' ? styles.activeNav : ''} type="button" onClick={() => setView('work')}><span>▤</span><small>My work</small></button>
+        <button className={view === 'work' ? styles.activeNav : ''} type="button" onClick={() => setView('work')}><span>▤</span><small>All work</small></button>
         <button className={styles.floatingCreate} type="button" onClick={startCreate} aria-label="Create work card"><span>＋</span></button>
         <button className={view === 'actions' ? styles.activeNav : ''} type="button" onClick={() => setView('actions')}><span>✓</span><small>Actions</small></button>
         <button className={view === 'notifications' ? styles.activeNav : ''} type="button" onClick={() => setView('notifications')} aria-label="Notifications">
@@ -612,10 +657,18 @@ export default function MobileWorkspace({
       <WorkItemDetail
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
+        people={people}
         onClose={closeDetail}
         onUpdate={saveMobileUpdate}
-        canUpdateStatus={Boolean(selectedItem?.owner === currentUserName)}
-        canUpdateChecklist={(step) => step.assignee === currentUserName}
+        onEdit={saveMobileEdit}
+        onArchive={changeMobileArchive}
+        onDelete={deleteMobileItem}
+        canUpdateStatus={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
+        canUpdateChecklist={(step) => Boolean(selectedItem && !selectedItem.archivedAt && (canManage || step.assignee === currentUserName))}
+        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canDelete={Boolean(canManage && selectedItem?.archivedAt)}
+        allowAllChecklistStatuses={canManage}
       />
     </main>
   );
@@ -632,7 +685,7 @@ function WorkList({ items, loading, error, title, suffix, onOpen }: { items: Wor
       <div className={styles.cardList}>
         {items.map((item) => (
           <article
-            className={styles.workCard}
+            className={item.archivedAt ? styles.archivedCard : styles.workCard}
             key={item.id}
             role="button"
             tabIndex={0}
@@ -645,7 +698,7 @@ function WorkList({ items, loading, error, title, suffix, onOpen }: { items: Wor
               }
             }}
           >
-            <div className={styles.cardMeta}><span>{item.id}</span><b className={styles[item.status]}>{STATUS_LABELS[item.status]}</b></div>
+            <div className={styles.cardMeta}><span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span><b className={styles[item.status]}>{STATUS_LABELS[item.status]}</b></div>
             <h3>{item.title}</h3>
             {item.health === 'blocked' ? <p className={styles.blockedCopy}>Blocked · {progressCopy(item)}</p> : null}
             <div className={styles.progress}><i style={{ width: `${item.progress}%` }} /></div>

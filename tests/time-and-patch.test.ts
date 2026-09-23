@@ -34,6 +34,10 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
     blocker: null,
     createdAt: '2026-02-01T08:00:00.000Z',
     updatedAt: '2026-02-01T08:00:00.000Z',
+    archivedAt: null,
+    archivedByName: null,
+    activityCount: 0,
+    latestActivityAt: null,
     checklist: [{
       id: 'step-1',
       workItemId: 'PROP-001',
@@ -132,7 +136,7 @@ test('engineers can update owned workflow and assigned actions only', async () =
 
   const outsider = createWorkItemHandlers(
     repository,
-    async () => ({ name: 'Other Engineer', role: 'engineer' }),
+    async () => ({ id: null, name: 'Other Engineer', role: 'engineer' }),
   );
   const malformed = new Request('http://localhost/api/work-items', {
     method: 'PATCH',
@@ -149,13 +153,13 @@ test('engineers can update owned workflow and assigned actions only', async () =
 
   const owner = createWorkItemHandlers(
     repository,
-    async () => ({ name: 'Owner Engineer', role: 'engineer' }),
+    async () => ({ id: null, name: 'Owner Engineer', role: 'engineer' }),
   );
   assert.equal((await owner.PATCH(patchRequest({ id: current.id, status: 'review' }))).status, 200);
 
   const assignee = createWorkItemHandlers(
     repository,
-    async () => ({ name: 'Assigned Engineer', role: 'engineer' }),
+    async () => ({ id: null, name: 'Assigned Engineer', role: 'engineer' }),
   );
   assert.equal((await assignee.PATCH(patchRequest({
     id: current.id,

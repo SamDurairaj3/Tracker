@@ -240,3 +240,267 @@
 .checklist article.withSelect { grid-template-columns: 7.4rem minmax(0, 1fr); }
 
 .saving { margin: 0.7rem 0 0; color: #587267; font-size: 0.76rem; font-weight: 750; }
+
+.archivedBanner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.5rem;
+  margin-bottom: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #d4c9ad;
+  border-radius: 0.8rem;
+  color: #5e4b25;
+  background: #fff8e8;
+}
+.archivedBanner strong { font-size: 0.8rem; text-transform: uppercase; }
+.archivedBanner span { font-size: 0.78rem; }
+.archivedBanner small { grid-column: 1 / -1; color: #7b6b4d; }
+.badges .archiveBadge { color: #644d22; background: #f6e6bd; }
+
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+.itemActions button,
+.editFooter button,
+.deletePanel button,
+.activityError button {
+  min-height: 2.35rem;
+  padding: 0 0.8rem;
+  border: 1px solid #bfd1c8;
+  border-radius: 0.55rem;
+  color: #214f3d;
+  background: white;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.itemActions button:disabled,
+.editFooter button:disabled,
+.deletePanel button:disabled { cursor: wait; opacity: 0.6; }
+.itemActions .dangerAction { margin-left: auto; border-color: #e0b8af; color: #953f32; background: #fff6f3; }
+
+.deletePanel {
+  margin-top: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid #e5bbb3;
+  border-radius: 0.8rem;
+  background: #fff7f5;
+}
+.deletePanel h3,
+.deletePanel p { margin: 0; }
+.deletePanel h3 { color: #8d372d; font-size: 0.92rem; }
+.deletePanel p { margin-top: 0.35rem; color: #725c57; font-size: 0.78rem; line-height: 1.5; }
+.deletePanel label { display: grid; gap: 0.35rem; margin-top: 0.7rem; font-size: 0.72rem; font-weight: 800; }
+.deletePanel input { min-height: 2.45rem; padding: 0 0.7rem; border: 1px solid #d8b2a9; border-radius: 0.55rem; font: inherit; }
+.deletePanel > div { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.7rem; }
+.deletePanel .deleteButton { border-color: #9d4034; color: white; background: #9d4034; }
+
+.editForm {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #d6e2dc;
+  border-radius: 0.85rem;
+  background: white;
+}
+.editGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.editGrid label { display: grid; align-content: start; gap: 0.32rem; min-width: 0; }
+.editGrid label > span { color: #4d6459; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+.editGrid input,
+.editGrid select,
+.editGrid textarea,
+.editChecklistRow input,
+.editChecklistRow select,
+.commentForm textarea,
+.commentForm select {
+  width: 100%;
+  min-height: 2.45rem;
+  padding: 0.62rem 0.7rem;
+  border: 1px solid #bfd1c8;
+  border-radius: 0.55rem;
+  color: #173d2f;
+  background: white;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.editGrid textarea,
+.commentForm textarea { resize: vertical; }
+.editGrid input[type='range'] { padding-inline: 0; }
+.fullField { grid-column: 1 / -1; }
+
+.editChecklist {
+  margin-top: 1rem;
+  border: 1px solid #dce6e1;
+  border-radius: 0.7rem;
+  overflow: hidden;
+}
+.editChecklist > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.75rem;
+  background: #f4f8f6;
+}
+.editChecklist h3,
+.editChecklist p { margin: 0; }
+.editChecklist h3 { font-size: 0.82rem; }
+.editChecklist p { margin-top: 0.18rem; color: #73857c; font-size: 0.68rem; }
+.editChecklist header button {
+  flex: 0 0 auto;
+  border: 0;
+  color: #23674c;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+.editChecklistRow {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1.5fr) minmax(8rem, 1fr) 2rem;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  border-top: 1px solid #e7edea;
+}
+.editChecklistRow > span { color: #829088; font-size: 0.7rem; text-align: center; }
+.editChecklistRow > button {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: #9b4435;
+  background: #fae9e5;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.editFooter { display: flex; justify-content: flex-end; gap: 0.55rem; margin-top: 0.9rem; }
+.primaryAction {
+  border-color: #1f674c !important;
+  color: white !important;
+  background: #1f674c !important;
+}
+
+.activitySection {
+  margin-top: 1rem;
+  border: 1px solid #d5e1db;
+  border-radius: 0.85rem;
+  background: white;
+  overflow: hidden;
+}
+.activityToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border: 0;
+  color: #173d2f;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+}
+.activityToggle > span { display: grid; gap: 0.18rem; }
+.activityToggle strong { font-size: 0.9rem; }
+.activityToggle small { color: #74867d; font-size: 0.7rem; font-weight: 600; }
+.activityToggle > b { font-size: 1.25rem; font-weight: 500; }
+.activityBody { border-top: 1px solid #e5ece8; }
+.activityState { margin: 0; padding: 1rem; color: #70827a; font-size: 0.78rem; text-align: center; }
+.activityError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 0.75rem;
+  padding: 0.7rem;
+  border-radius: 0.6rem;
+  color: #8a372b;
+  background: #fde8e3;
+}
+.activityError p { margin: 0; font-size: 0.76rem; }
+.activityList { margin: 0; padding: 0; list-style: none; }
+.activityList li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid #edf1ef;
+}
+.activityAvatar {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: #2b7458;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.activityList header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.55rem;
+}
+.activityList header strong { font-size: 0.78rem; }
+.activityList header span {
+  padding: 0.18rem 0.38rem;
+  border-radius: 99px;
+  color: #4e665b;
+  background: #edf3f0;
+  font-size: 0.6rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.activityList time { margin-left: auto; color: #819088; font-size: 0.65rem; }
+.activityList p { margin: 0.35rem 0 0; color: #41584d; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.activityList li small { display: block; margin-top: 0.3rem; color: #647970; font-size: 0.68rem; }
+
+.commentForm { padding: 0.9rem; background: #f4f8f6; }
+.commentForm > label { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem; }
+.commentForm label > span { color: #4d6459; font-size: 0.7rem; font-weight: 800; }
+.commentForm textarea { grid-column: 1 / -1; }
+.commentForm label > small { color: #7a8a82; font-size: 0.65rem; text-align: right; }
+.commentForm > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.7rem;
+  margin-top: 0.65rem;
+}
+.commentForm > div label { display: grid; gap: 0.3rem; }
+.commentForm button {
+  min-height: 2.45rem;
+  padding: 0 0.9rem;
+  border: 1px solid #1f674c;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+.commentForm button:disabled { cursor: wait; opacity: 0.58; }
+
+@media (max-width: 620px) {
+  .itemActions .dangerAction { margin-left: 0; }
+  .editGrid { grid-template-columns: 1fr; }
+  .fullField { grid-column: auto; }
+  .editChecklistRow {
+    grid-template-columns: 1.4rem minmax(0, 1fr) 2rem;
+  }
+  .editChecklistRow select { grid-column: 2 / 3; }
+  .editChecklistRow > button { grid-column: 3; grid-row: 1 / span 2; }
+  .commentForm > div { grid-template-columns: 1fr; }
+  .commentForm button { width: 100%; }
+  .activityList header time { width: 100%; margin-left: 0; }
+}

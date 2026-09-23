@@ -16,6 +16,14 @@ export type ProgressMethod =
   | 'quantity'
   | 'manual-estimate';
 export type ChecklistStatus = 'open' | 'in-progress' | 'done' | 'blocked';
+export type WorkItemActivityType =
+  | 'comment'
+  | 'created'
+  | 'edited'
+  | 'workflow'
+  | 'checklist'
+  | 'archived'
+  | 'restored';
 
 export const WORK_STATUSES = ['captured', 'ready', 'active', 'review', 'done'] as const;
 export const WORK_HEALTH_VALUES = ['on-track', 'at-risk', 'blocked'] as const;
@@ -64,7 +72,23 @@ export type WorkItem = {
   blocker: string | null;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
+  archivedByName: string | null;
+  activityCount: number;
+  latestActivityAt: string | null;
   checklist: ChecklistStep[];
+};
+
+export type WorkItemActivity = {
+  id: string;
+  workItemId: string;
+  type: WorkItemActivityType;
+  authorUserId: string | null;
+  authorName: string;
+  body: string;
+  checklistStepId: string | null;
+  checklistTitle: string | null;
+  createdAt: string;
 };
 
 export type ChecklistStepInput = {
@@ -100,6 +124,30 @@ export type WorkItemPatch = {
     id: string;
     status: ChecklistStatus;
   };
+};
+
+export type WorkItemEditChecklistInput = {
+  id?: string;
+  title: string;
+  assignee: string;
+  weight?: number;
+};
+
+export type WorkItemEditInput = {
+  id: string;
+  title: string;
+  type: WorkItemType;
+  team: string;
+  owner: string;
+  priority: WorkPriority;
+  purpose: string;
+  expectedResult: string;
+  linkedGoal?: string;
+  start: string;
+  due: string;
+  progressMethod: ProgressMethod;
+  progress?: number;
+  checklist: WorkItemEditChecklistInput[];
 };
 
 export const TEAMS = [

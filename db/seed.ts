@@ -11,11 +11,12 @@ export function assertDemoSeedAllowed(environment: NodeJS.ProcessEnv, confirmed:
 export async function seedDemo(db: Database, environment: NodeJS.ProcessEnv, confirmed: boolean) {
   assertDemoSeedAllowed(environment, confirmed);
   return db.transaction(async (client) => {
-    await client.query('LOCK TABLE work_items, checklist_steps, work_item_counters IN EXCLUSIVE MODE');
+    await client.query('LOCK TABLE work_items, checklist_steps, work_item_activity, work_item_counters IN EXCLUSIVE MODE');
     const { rows } = await client.query<{ occupied: boolean }>(`
       SELECT EXISTS (SELECT 1 FROM work_items)
           OR EXISTS (SELECT 1 FROM checklist_steps)
-          OR EXISTS (SELECT 1 FROM work_item_counters) AS occupied
+          OR EXISTS (SELECT 1 FROM work_item_counters)
+          OR EXISTS (SELECT 1 FROM work_item_activity) AS occupied
     `);
     if (rows[0].occupied) throw new Error('Demo seeding refuses a database with existing work records or counters.');
     const timestamp = '2026-08-28T08:00:00.000Z';

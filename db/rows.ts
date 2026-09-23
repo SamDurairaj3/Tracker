@@ -1,4 +1,4 @@
-import type { ChecklistStatus, ProgressMethod, WorkHealth, WorkItemType, WorkPriority, WorkStatus } from '../lib/work-items';
+import type { ChecklistStatus, ProgressMethod, WorkHealth, WorkItemActivityType, WorkItemType, WorkPriority, WorkStatus } from '../lib/work-items';
 export type WorkItemRow = {
   id: string;
   title: string;
@@ -20,6 +20,11 @@ export type WorkItemRow = {
   blocker: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  archived_by_user_id: string | null;
+  archived_by_name: string | null;
+  activity_count: number;
+  latest_activity_at: string | null;
 };
 
 export type ChecklistRow = {
@@ -33,3 +38,15 @@ export type ChecklistRow = {
 };
 
 
+
+export type WorkItemActivityRow = {
+  id: string;
+  work_item_id: string;
+  entry_type: WorkItemActivityType;
+  author_user_id: string | null;
+  author_name: string;
+  body: string;
+  checklist_step_id: string | null;
+  checklist_title: string | null;
+  created_at: string;
+};

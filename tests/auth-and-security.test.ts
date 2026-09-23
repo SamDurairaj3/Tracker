@@ -49,6 +49,10 @@ function stubItem(createdBy: string): WorkItem {
     blocker: null,
     createdAt: '2026-09-19T00:00:00.000Z',
     updatedAt: '2026-09-19T00:00:00.000Z',
+    archivedAt: null,
+    archivedByName: null,
+    activityCount: 1,
+    latestActivityAt: '2026-09-19T00:00:00.000Z',
     checklist: [],
   };
 }
@@ -98,7 +102,7 @@ test('work-item API rejects anonymous and unauthorized callers before storage', 
 
   const unknownRole = createWorkItemHandlers(
     repository,
-    async () => ({ name: 'Visitor', role: 'viewer' }),
+    async () => ({ id: null, name: 'Visitor', role: 'viewer' }),
   );
   const forbidden = await unknownRole.PATCH(request('PATCH', { id: 'PROP-001' }));
   assert.equal(forbidden.status, 403);
@@ -111,12 +115,12 @@ test('work-item creation always uses the authenticated display name', async () =
   const api = createWorkItemHandlers({
     async listWorkItems() { return []; },
     async getWorkItem() { return null; },
-    async insertWorkItem(value) {
-      recorded = value.createdBy;
-      return stubItem(value.createdBy);
+    async insertWorkItem(value, actor) {
+      recorded = actor?.name ?? '';
+      return stubItem(actor?.name ?? '');
     },
     async patchWorkItem() { return null; },
-  }, async () => ({ name: 'Signed In Engineer', role: 'engineer' }));
+  }, async () => ({ id: null, name: 'Signed In Engineer', role: 'engineer' }));
   const response = await api.POST(request('POST', { ...input, createdBy: 'Spoofed Name' }));
   assert.equal(response.status, 201);
   assert.equal(recorded, 'Signed In Engineer');
@@ -126,7 +130,7 @@ test('work-item creation always uses the authenticated display name', async () =
 test('auth migration is explicit and creates every Better Auth table', async () => {
   const { db, close } = memoryPostgres();
   try {
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql']);
     const { rows } = await db.query<{ name: string | null }>(`
       SELECT to_regclass(name)::text AS name
       FROM unnest(ARRAY[
