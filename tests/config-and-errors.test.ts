@@ -82,8 +82,8 @@ test('API storage failures retain generic error bodies and 500 statuses', async 
   );
   for (const [response, message] of [
     [await api.GET(new Request('http://localhost/api/work-items')), 'Work items could not be loaded.'],
-    [await api.POST(new Request('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })), 'The work item could not be created.'],
-    [await api.PATCH(new Request('http://localhost', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 'PROP-001', status: 'active' }) })), 'The work item could not be updated.'],
+    [await api.POST(new Request('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' }, body: JSON.stringify(input) })), 'The work item could not be created.'],
+    [await api.PATCH(new Request('http://localhost', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' }, body: JSON.stringify({ id: 'PROP-001', status: 'active' }) })), 'The work item could not be updated.'],
   ] as const) {
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: message });

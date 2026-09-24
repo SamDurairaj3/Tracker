@@ -573,7 +573,7 @@ export default function MobileWorkspace({
 
         {view === 'work' ? (
           <>
-            <ScreenHeading eyebrow="Shared delivery" title="All work" description="Open any active card to follow activity or add context." />
+            <ScreenHeading eyebrow="Responsibility" title="My cards" description="Work you own, created, or contribute to." />
             <label className={styles.archiveToggle}>
               <input
                 type="checkbox"
@@ -646,7 +646,7 @@ export default function MobileWorkspace({
 
       <nav className={styles.bottomNav} aria-label="Mobile navigation">
         <button className={view === 'home' ? styles.activeNav : ''} type="button" onClick={() => setView('home')}><span>⌂</span><small>Home</small></button>
-        <button className={view === 'work' ? styles.activeNav : ''} type="button" onClick={() => setView('work')}><span>▤</span><small>All work</small></button>
+        <button className={view === 'work' ? styles.activeNav : ''} type="button" onClick={() => setView('work')}><span>▤</span><small>My cards</small></button>
         <button className={styles.floatingCreate} type="button" onClick={startCreate} aria-label="Create work card"><span>＋</span></button>
         <button className={view === 'actions' ? styles.activeNav : ''} type="button" onClick={() => setView('actions')}><span>✓</span><small>Actions</small></button>
         <button className={view === 'notifications' ? styles.activeNav : ''} type="button" onClick={() => setView('notifications')} aria-label="Notifications">

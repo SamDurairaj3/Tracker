@@ -54,7 +54,7 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
 function patchRequest(body: unknown) {
   return new Request('http://localhost/api/work-items', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' },
     body: JSON.stringify(body),
   });
 }
@@ -140,7 +140,7 @@ test('engineers can update owned workflow and assigned actions only', async () =
   );
   const malformed = new Request('http://localhost/api/work-items', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' },
     body: '{',
   });
   assert.equal((await outsider.PATCH(malformed)).status, 400);

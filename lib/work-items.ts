@@ -79,6 +79,16 @@ export type WorkItem = {
   checklist: ChecklistStep[];
 };
 
+export function canAccessWorkItem(
+  item: WorkItem,
+  actor: { name: string; role: string },
+) {
+  return actor.role === 'admin'
+    || item.owner === actor.name
+    || item.createdBy === actor.name
+    || item.checklist.some((step) => step.assignee === actor.name);
+}
+
 export type WorkItemActivity = {
   id: string;
   workItemId: string;

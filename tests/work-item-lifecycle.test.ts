@@ -18,13 +18,18 @@ const owner: WorkItemActor = {
   name: 'Owner Engineer',
   role: 'engineer',
 };
-const outsider: WorkItemActor = {
+const contributor: WorkItemActor = {
   id: '10000000-0000-4000-8000-000000000003',
+  name: 'Contributor Engineer',
+  role: 'engineer',
+};
+const unrelated: WorkItemActor = {
+  id: '10000000-0000-4000-8000-000000000004',
   name: 'Other Engineer',
   role: 'engineer',
 };
 const admin: WorkItemActor = {
-  id: '10000000-0000-4000-8000-000000000004',
+  id: '10000000-0000-4000-8000-000000000005',
   name: 'Admin Person',
   role: 'admin',
 };
@@ -64,14 +69,13 @@ function editPayload(item: WorkItem, changes: Partial<WorkItemEditInput> = {}): 
   };
 }
 
-test('shared discussion and lifecycle permissions remain transactional', async () => {
+test('relevant users can discuss cards while unrelated users remain isolated', async () => {
   const { db, close } = memoryPostgres();
   try {
     await migrate(db);
-    for (const actor of [creator, owner, outsider, admin]) {
+    for (const actor of [creator, owner, contributor, unrelated, admin]) {
       await db.query(
-        `INSERT INTO auth_users (id, name, email, role)
-         VALUES ($1, $2, $3, $4)`,
+        'INSERT INTO auth_users (id, name, email, role) VALUES ($1, $2, $3, $4)',
         [actor.id, actor.name, actor.name.toLowerCase().replace(' ', '.') + '@example.test', actor.role],
       );
     }
@@ -80,9 +84,15 @@ test('shared discussion and lifecycle permissions remain transactional', async (
     let item = await repository.insertWorkItem({
       ...input,
       owner: owner.name,
-      checklist: [{ title: 'Review evidence', assignee: owner.name }],
+      checklist: [{ title: 'Review evidence', assignee: contributor.name }],
     }, creator);
     const checklistId = item.checklist[0].id;
+    const otherItem = await repository.insertWorkItem({
+      ...input,
+      title: 'Administrative follow-up',
+      owner: admin.name,
+      checklist: [{ title: 'Admin action', assignee: admin.name }],
+    }, admin);
 
     const anonymousActivity = createWorkItemActivityHandlers(repository, async () => null);
     assert.equal(
@@ -90,50 +100,124 @@ test('shared discussion and lifecycle permissions remain transactional', async (
       401,
     );
 
-    const outsiderActivity = createWorkItemActivityHandlers(repository, async () => outsider);
-    assert.equal((await outsiderActivity.POST(request(
+    const creatorApi = createWorkItemHandlers(repository, async () => creator);
+    const ownerApi = createWorkItemHandlers(repository, async () => owner);
+    const contributorApi = createWorkItemHandlers(repository, async () => contributor);
+    const unrelatedApi = createWorkItemHandlers(repository, async () => unrelated);
+    const adminApi = createWorkItemHandlers(repository, async () => admin);
+
+    async function listedIds(
+      api: ReturnType<typeof createWorkItemHandlers>,
+      includeArchived = false,
+    ) {
+      const response = await api.GET(request(
+        'http://localhost/api/work-items' + (includeArchived ? '?includeArchived=true' : ''),
+      ));
+      assert.equal(response.status, 200);
+      return (await response.json() as { items: WorkItem[] }).items.map((candidate) => candidate.id);
+    }
+
+    assert.deepEqual(await listedIds(creatorApi), [item.id]);
+    assert.deepEqual(await listedIds(ownerApi), [item.id]);
+    assert.deepEqual(await listedIds(contributorApi), [item.id]);
+    assert.deepEqual(await listedIds(unrelatedApi), []);
+    assert.deepEqual(await listedIds(adminApi), [otherItem.id, item.id]);
+
+    const creatorActivity = createWorkItemActivityHandlers(repository, async () => creator);
+    const ownerActivity = createWorkItemActivityHandlers(repository, async () => owner);
+    const contributorActivity = createWorkItemActivityHandlers(repository, async () => contributor);
+    const unrelatedActivity = createWorkItemActivityHandlers(repository, async () => unrelated);
+
+    assert.equal((await contributorActivity.POST(request(
       'http://localhost/api/work-items/activity',
       'POST',
       { id: item.id, body: '   ' },
     ))).status, 400);
-    assert.equal((await outsiderActivity.POST(request(
+    assert.equal((await contributorActivity.POST(request(
       'http://localhost/api/work-items/activity',
       'POST',
-      { id: item.id, body: 'Cross-team review is complete.', checklistStepId: 'not-a-uuid' },
+      { id: item.id, body: 'Evidence reviewed.', checklistStepId: 'not-a-uuid' },
     ))).status, 400);
 
-    const commentResponse = await outsiderActivity.POST(request(
-      'http://localhost/api/work-items/activity',
-      'POST',
+    const proxiedComment = await contributorActivity.POST(new Request(
+      'http://tracker:3000/api/work-items/activity',
       {
-        id: item.id,
-        body: 'Cross-team review is complete.',
-        checklistStepId: checklistId,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Host: 'tracker:3000',
+          Origin: 'https://tunnel.example',
+          'X-Forwarded-Host': 'tunnel.example, tracker:3000',
+          'X-Forwarded-Proto': 'https, http',
+        },
+        body: JSON.stringify({
+          id: item.id,
+          body: 'Evidence reviewed through the tunnel.',
+          checklistStepId: checklistId,
+        }),
       },
     ));
-    assert.equal(commentResponse.status, 201);
-    assert.equal(commentResponse.headers.get('cache-control'), 'no-store, private');
-    const comment = (await commentResponse.json() as {
+    assert.equal(proxiedComment.status, 201);
+    assert.equal(proxiedComment.headers.get('cache-control'), 'no-store, private');
+    const comment = (await proxiedComment.json() as {
       activity: { authorName: string; checklistStepId: string; checklistTitle: string };
     }).activity;
-    assert.equal(comment.authorName, outsider.name);
+    assert.equal(comment.authorName, contributor.name);
     assert.equal(comment.checklistStepId, checklistId);
     assert.equal(comment.checklistTitle, 'Review evidence');
 
-    const unrelatedApi = createWorkItemHandlers(repository, async () => outsider);
+    assert.equal((await ownerActivity.POST(request(
+      'http://localhost/api/work-items/activity',
+      'POST',
+      { id: item.id, body: 'Owner context.' },
+    ))).status, 201);
+    assert.equal((await creatorActivity.POST(request(
+      'http://localhost/api/work-items/activity',
+      'POST',
+      { id: item.id, body: 'Creator context.' },
+    ))).status, 201);
+
+    for (const activityApi of [creatorActivity, ownerActivity, contributorActivity]) {
+      assert.equal((await activityApi.GET(request(
+        'http://localhost/api/work-items/activity?id=' + item.id,
+      ))).status, 200);
+    }
+    assert.equal((await unrelatedActivity.GET(request(
+      'http://localhost/api/work-items/activity?id=' + item.id,
+    ))).status, 403);
+    assert.equal((await unrelatedActivity.POST(request(
+      'http://localhost/api/work-items/activity',
+      'POST',
+      { id: item.id, body: 'Unrelated comment.' },
+    ))).status, 403);
+
+    const hostileOrigin = await contributorActivity.POST(new Request(
+      'http://tracker:3000/api/work-items/activity',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://attacker.example',
+          'X-Forwarded-Host': 'tunnel.example',
+          'X-Forwarded-Proto': 'https',
+        },
+        body: JSON.stringify({ id: item.id, body: 'Hostile origin.' }),
+      },
+    ));
+    assert.equal(hostileOrigin.status, 403);
+
     assert.equal((await unrelatedApi.PUT(request(
       'http://localhost/api/work-items',
       'PUT',
       editPayload(item, { title: 'Forbidden edit' }),
     ))).status, 403);
-    const unrelatedLifecycle = createWorkItemLifecycleHandlers(repository, async () => outsider);
+    const unrelatedLifecycle = createWorkItemLifecycleHandlers(repository, async () => unrelated);
     assert.equal((await unrelatedLifecycle.PATCH(request(
       'http://localhost/api/work-items/lifecycle',
       'PATCH',
       { id: item.id, archived: true },
     ))).status, 403);
 
-    const ownerApi = createWorkItemHandlers(repository, async () => owner);
     const ownerEdit = await ownerApi.PUT(request(
       'http://localhost/api/work-items',
       'PUT',
@@ -145,11 +229,12 @@ test('shared discussion and lifecycle permissions remain transactional', async (
     assert.equal(item.checklist.length, 0);
 
     const historyAfterRemoval = await repository.listWorkItemActivity(item.id);
-    const retainedComment = historyAfterRemoval.find((entry) => entry.type === 'comment');
+    const retainedComment = historyAfterRemoval.find(
+      (entry) => entry.type === 'comment' && entry.authorName === contributor.name,
+    );
     assert.equal(retainedComment?.checklistStepId, null);
     assert.equal(retainedComment?.checklistTitle, 'Review evidence');
 
-    const adminApi = createWorkItemHandlers(repository, async () => admin);
     const adminEdit = await adminApi.PUT(request(
       'http://localhost/api/work-items',
       'PUT',
@@ -174,14 +259,17 @@ test('shared discussion and lifecycle permissions remain transactional', async (
       'PATCH',
       { id: item.id, status: 'active' },
     ))).status, 409);
-    assert.equal((await outsiderActivity.POST(request(
+    assert.equal((await ownerActivity.POST(request(
       'http://localhost/api/work-items/activity',
       'POST',
       { id: item.id, body: 'Archived cards reject comments.' },
     ))).status, 409);
 
-    assert.deepEqual(await repository.listWorkItems(), []);
-    assert.deepEqual((await repository.listWorkItems(true)).map((candidate) => candidate.id), [item.id]);
+    assert.deepEqual(await listedIds(ownerApi), []);
+    assert.deepEqual(await listedIds(ownerApi, true), [item.id]);
+    assert.deepEqual(await listedIds(unrelatedApi, true), []);
+    assert.deepEqual(await listedIds(adminApi), [otherItem.id]);
+    assert.deepEqual(await listedIds(adminApi, true), [otherItem.id, item.id]);
 
     const restoreResponse = await creatorLifecycle.PATCH(request(
       'http://localhost/api/work-items/lifecycle',
@@ -253,6 +341,13 @@ test('mutation requests enforce JSON content type and browser same origin', asyn
     body: JSON.stringify(input),
   }));
   assert.equal(noType.status, 415);
+
+  const missingOrigin = await api.POST(new Request('http://localhost/api/work-items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  }));
+  assert.equal(missingOrigin.status, 403);
 
   const crossOrigin = await api.POST(new Request('http://localhost/api/work-items', {
     method: 'POST',

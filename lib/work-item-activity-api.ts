@@ -1,4 +1,5 @@
 import type { createWorkItemRepository } from '../db/work-items';
+import { canAccessWorkItem } from './work-items';
 import type { AuthenticateWorkItemRequest } from './work-items-api';
 import {
   ACCESS_DENIED,
@@ -14,7 +15,7 @@ import {
 
 type ActivityRepository = Pick<
   ReturnType<typeof createWorkItemRepository>,
-  'listWorkItemActivity' | 'addWorkItemComment'
+  'getWorkItem' | 'listWorkItemActivity' | 'addWorkItemComment'
 >;
 
 type LifecycleRepository = Pick<
@@ -32,6 +33,9 @@ export function createWorkItemActivityHandlers(
     const id = new URL(request.url).searchParams.get('id');
     if (!isWorkItemId(id)) return jsonError('A valid work-item ID is required.', 400);
     try {
+      const item = await repository.getWorkItem(id);
+      if (!item) return jsonError('Work item not found.', 404);
+      if (!canAccessWorkItem(item, access.actor)) return jsonError(ACCESS_DENIED, 403);
       return Response.json(
         { activity: await repository.listWorkItemActivity(id) },
         { headers: NO_STORE_HEADERS },
@@ -73,6 +77,9 @@ export function createWorkItemActivityHandlers(
       return jsonError('A valid checklist action ID is required.', 400);
     }
     try {
+      const item = await repository.getWorkItem(payload.id);
+      if (!item) return jsonError('Work item not found.', 404);
+      if (!canAccessWorkItem(item, access.actor)) return jsonError(ACCESS_DENIED, 403);
       const activity = await repository.addWorkItemComment(
         payload.id,
         payload.body.trim(),

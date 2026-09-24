@@ -167,12 +167,7 @@ export default function EngineeringWorkspace({
     () => items.filter((item) => !item.archivedAt),
     [items],
   );
-  const ownedWork = useMemo(
-    () => items.filter((item) => item.owner === currentUserName || (
-      showArchived && Boolean(item.archivedAt) && item.createdBy === currentUserName
-    )),
-    [currentUserName, items, showArchived],
-  );
+  const myCards = items;
   const activeOwnedWork = useMemo(
     () => activeItems.filter((item) => item.owner === currentUserName),
     [activeItems, currentUserName],
@@ -343,7 +338,7 @@ export default function EngineeringWorkspace({
           <a className={styles.navActive} href="#overview" aria-current="page">
             <span aria-hidden="true">◆</span> Today
           </a>
-          <a href="#my-work"><span aria-hidden="true">▦</span> My work <b>{ownedWork.length}</b></a>
+          <a href="#my-work"><span aria-hidden="true">▦</span> My cards <b>{myCards.length}</b></a>
           <a href="#my-actions"><span aria-hidden="true">✓</span> My actions <b>{assignedActions.length}</b></a>
           <a href="#blocked"><span aria-hidden="true">△</span> Blocked <b>{blockedCount}</b></a>
 
@@ -432,18 +427,18 @@ export default function EngineeringWorkspace({
             <section className={styles.panel} id="my-work" aria-labelledby="my-work-title">
               <header className={styles.panelHeader}>
                 <div>
-                  <span className={styles.eyebrow}>Accountability</span>
-                  <h3 id="my-work-title">My owned work</h3>
+                  <span className={styles.eyebrow}>Responsibility</span>
+                  <h3 id="my-work-title">My cards</h3>
                 </div>
                 <button type="button" onClick={openCreateDialog}>Create new</button>
               </header>
 
               <div className={styles.workList}>
                 {loading ? <p className={styles.emptyState}>Loading your work…</p> : null}
-                {!loading && ownedWork.length === 0 ? (
-                  <p className={styles.emptyState}>No owned work yet. Create the first work item.</p>
+                {!loading && myCards.length === 0 ? (
+                  <p className={styles.emptyState}>No relevant work yet. Create the first work item.</p>
                 ) : null}
-                {ownedWork.map((item) => {
+                {myCards.map((item) => {
                   const completedSteps = item.checklist.filter((step) => step.status === 'done').length;
                   return (
                     <article className={item.archivedAt ? styles.archivedCard : styles.workCard} key={item.id} id={item.health === 'blocked' ? 'blocked' : undefined}>
@@ -479,7 +474,9 @@ export default function EngineeringWorkspace({
                       </div>
                       <footer>
                         <span>{item.team} · {item.priority}</span>
-                        {!item.archivedAt && nextStatusLabels[item.status] ? (
+                        {!item.archivedAt
+                        && nextStatusLabels[item.status]
+                        && (canManage || item.owner === currentUserName) ? (
                           <button
                             type="button"
                             disabled={updatingId === item.id}
@@ -488,7 +485,7 @@ export default function EngineeringWorkspace({
                             {updatingId === item.id ? 'Saving…' : nextStatusLabels[item.status]}
                             <span aria-hidden="true">→</span>
                           </button>
-                        ) : <strong>Completed</strong>}
+                        ) : <strong>{item.status === 'done' ? 'Completed' : 'View only'}</strong>}
                       </footer>
                     </article>
                   );
@@ -545,31 +542,6 @@ export default function EngineeringWorkspace({
             </aside>
           </div>
 
-          <section className={styles.sharedWork} aria-labelledby="shared-work-title">
-            <header className={styles.panelHeader}>
-              <div>
-                <span className={styles.eyebrow}>Shared delivery</span>
-                <h3 id="shared-work-title">All work cards</h3>
-              </div>
-              <span className={styles.actionCount}>{items.length}</span>
-            </header>
-            <p className={styles.panelIntro}>Open any active card to read its history or add a comment.</p>
-            <div className={styles.sharedWorkList}>
-              {items.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={item.archivedAt ? styles.sharedArchived : undefined}
-                  onClick={() => setSelectedItemId(item.id)}
-                >
-                  <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
-                  <strong>{item.title}</strong>
-                  <small>{item.owner} · {item.team} · {STATUS_LABELS[item.status]}</small>
-                </button>
-              ))}
-              {!loading && !items.length ? <p className={styles.emptyState}>No work cards are available.</p> : null}
-            </div>
-          </section>
         </div>
       </section>
 

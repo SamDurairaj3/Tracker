@@ -24,7 +24,7 @@ const demoEnvironment = { NODE_ENV: 'development', ALLOW_DEMO_SEED: 'true' } as 
 function request(method: string, body?: unknown) {
   return new Request('http://localhost/api/work-items', {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: 'http://localhost' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }

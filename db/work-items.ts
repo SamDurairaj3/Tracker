@@ -3,6 +3,7 @@ import { database } from './postgres';
 import type { Database, Queryable } from './database';
 import type { ChecklistRow, WorkItemActivityRow, WorkItemRow } from './rows';
 import {
+  canAccessWorkItem,
   formatDueLabel,
   STATUS_LABELS,
   type CreateWorkItemInput,
@@ -552,6 +553,9 @@ export function createWorkItemRepository(db: Database) {
         const existing = await readItem(client, id, true);
         if (!existing) throw new WorkItemMutationError('not-found', 'Work item not found.');
         assertEditable(existing);
+        if (!canAccessWorkItem(existing, actor)) {
+          throw new WorkItemMutationError('forbidden', 'Access denied.');
+        }
         let checklistTitle: string | null = null;
         if (checklistStepId) {
           const step = existing.checklist.find((candidate) => candidate.id === checklistStepId);

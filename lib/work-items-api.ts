@@ -5,6 +5,7 @@ import type {
 } from './work-items';
 import {
   TEAMS,
+  canAccessWorkItem,
   isChecklistStatus,
   isWorkHealth,
   isWorkStatus,
@@ -71,20 +72,38 @@ export async function authorizeWorkItemRequest(
   }
 }
 
+function firstHeaderValue(value: string | null) {
+  return value?.split(',', 1)[0]?.trim() ?? '';
+}
+
+function isSameOrigin(request: Request) {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  try {
+    const requestUrl = new URL(request.url);
+    const expectedHost = firstHeaderValue(request.headers.get('x-forwarded-host'))
+      || firstHeaderValue(request.headers.get('host'))
+      || requestUrl.host;
+    const expectedProtocol = (
+      firstHeaderValue(request.headers.get('x-forwarded-proto'))
+      || requestUrl.protocol.slice(0, -1)
+    ).toLowerCase();
+    if (!expectedHost || (expectedProtocol !== 'http' && expectedProtocol !== 'https')) {
+      return false;
+    }
+    const expectedOrigin = new URL(`${expectedProtocol}://${expectedHost}`).origin;
+    return new URL(origin).origin.toLowerCase() === expectedOrigin.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function validateMutationRequest(request: Request) {
-  const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
-  if (!contentType.startsWith('application/json')) {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
     return jsonError('Content-Type must be application/json.', 415);
   }
-
-  const origin = request.headers.get('origin');
-  const fetchSite = request.headers.get('sec-fetch-site');
-  if (
-    (origin && origin !== new URL(request.url).origin)
-    || (!origin && fetchSite && fetchSite !== 'same-origin')
-  ) {
-    return jsonError(ACCESS_DENIED, 403);
-  }
+  if (!isSameOrigin(request)) return jsonError(ACCESS_DENIED, 403);
   return null;
 }
 
@@ -328,8 +347,13 @@ export function createWorkItemHandlers(
     if (!access.ok) return access.response;
     try {
       const includeArchived = new URL(request.url).searchParams.get('includeArchived') === 'true';
+      const items = await repository.listWorkItems(includeArchived);
       return Response.json(
-        { items: await repository.listWorkItems(includeArchived) },
+        {
+          items: access.actor.role === 'admin'
+            ? items
+            : items.filter((item) => canAccessWorkItem(item, access.actor)),
+        },
         { headers: NO_STORE_HEADERS },
       );
     } catch (error) {
