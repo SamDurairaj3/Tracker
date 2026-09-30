@@ -1,17 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { formatDateTime } from '../../lib/local-time';
+import { dueCopy, formatDateTime, localDateKey } from '../../lib/local-time';
+import { useLiveNow } from '../../lib/use-live-now';
 import {
   CHECKLIST_STATUSES,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
   WORK_STATUSES,
+  filterWorkItemActivity,
   type ChecklistStep,
   type ProgressMethod,
   type WorkItem,
   type WorkItemActivity,
+  type WorkItemActivityFilter,
   type WorkItemEditInput,
   type WorkItemPatch,
   type WorkItemType,
@@ -82,6 +85,7 @@ function editDraft(item: WorkItem): WorkItemEditInput {
       id: step.id,
       title: step.title,
       assignee: step.assignee,
+      due: step.due,
       weight: step.weight,
     })),
   };
@@ -109,6 +113,7 @@ export default function WorkItemDetail({
   const [draft, setDraft] = useState<WorkItemEditInput | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState<WorkItemActivity[]>([]);
+  const [activityFilter, setActivityFilter] = useState<WorkItemActivityFilter>('everything');
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState('');
   const [comment, setComment] = useState('');
@@ -116,6 +121,7 @@ export default function WorkItemDetail({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const itemId = item?.id;
+  const now = useLiveNow();
 
   useEffect(() => {
     if (!itemId) return;
@@ -146,6 +152,8 @@ export default function WorkItemDetail({
     ? Math.max(item.activityCount, activity.length)
     : item.activityCount;
   const latestActivityAt = activity.at(-1)?.createdAt ?? item.latestActivityAt;
+  const filteredActivity = filterWorkItemActivity(activity, activityFilter);
+  const today = now ? localDateKey(now) : '';
   const personOptions = Array.from(new Set([
     item.owner,
     ...item.checklist.map((step) => step.assignee),
@@ -425,7 +433,7 @@ export default function WorkItemDetail({
                   </div>
                   <button type="button" onClick={() => setDraft({
                     ...draft,
-                    checklist: [...draft.checklist, { title: '', assignee: draft.owner, weight: 1 }],
+                    checklist: [...draft.checklist, { title: '', assignee: draft.owner, due: null, weight: 1 }],
                   })}>＋ Add action</button>
                 </header>
                 {draft.checklist.map((step, index) => (
@@ -451,6 +459,17 @@ export default function WorkItemDetail({
                     >
                       {personOptions.map((person) => <option key={person}>{person}</option>)}
                     </select>
+                    <input
+                      type="date"
+                      aria-label={'Due date for checklist action ' + (index + 1)}
+                      value={step.due ?? ''}
+                      onChange={(event) => setDraft({
+                        ...draft,
+                        checklist: draft.checklist.map((candidate, candidateIndex) => candidateIndex === index
+                          ? { ...candidate, due: event.target.value || null }
+                          : candidate),
+                      })}
+                    />
                     <button
                       type="button"
                       aria-label={`Remove checklist action ${index + 1}`}
@@ -580,7 +599,10 @@ export default function WorkItemDetail({
                       )}
                       <div>
                         <h4>{step.title}</h4>
-                        <p>{step.assignee} · {checklistLabels[step.status]}</p>
+                        <p>
+                          {step.assignee} · {checklistLabels[step.status]} ·{' '}
+                          {step.due ? (today ? dueCopy(step.due, today) : 'Due ' + step.due) : 'No due date'}
+                        </p>
                       </div>
                     </article>
                   );
@@ -609,6 +631,20 @@ export default function WorkItemDetail({
 
             {activityOpen ? (
               <div id="work-item-activity" className={styles.activityBody}>
+                <div className={styles.activityFilter}>
+                  <label>
+                    <span>Show</span>
+                    <select
+                      aria-label="Filter activity and discussion"
+                      value={activityFilter}
+                      onChange={(event) => setActivityFilter(event.target.value as WorkItemActivityFilter)}
+                    >
+                      <option value="everything">Everything</option>
+                      <option value="activity">Activity</option>
+                      <option value="comments">Comments</option>
+                    </select>
+                  </label>
+                </div>
                 {activityLoading ? <p className={styles.activityState} role="status">Loading activity…</p> : null}
                 {activityError ? (
                   <div className={styles.activityError} role="alert">
@@ -619,9 +655,16 @@ export default function WorkItemDetail({
                 {!activityLoading && !activityError && activity.length === 0 ? (
                   <p className={styles.activityState}>No activity has been recorded yet.</p>
                 ) : null}
-                {!activityLoading && activity.length > 0 ? (
+                {!activityLoading && !activityError && activity.length > 0 && filteredActivity.length === 0 ? (
+                  <p className={styles.activityState}>
+                    {activityFilter === 'comments'
+                      ? 'No comments have been added yet.'
+                      : 'No system activity matches this filter.'}
+                  </p>
+                ) : null}
+                {!activityLoading && filteredActivity.length > 0 ? (
                   <ol className={styles.activityList} aria-label="Chronological work-item activity">
-                    {activity.map((entry) => (
+                    {filteredActivity.map((entry) => (
                       <li key={entry.id}>
                         <div className={styles.activityAvatar} aria-hidden="true">{entry.authorName.slice(0, 1).toUpperCase()}</div>
                         <div>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import WorkItemDetail from '../components/work-item-detail';
+import SignOutButton from '../components/sign-out-button';
 import {
   useCallback,
   useEffect,
@@ -12,6 +13,7 @@ import {
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
+  canAccessWorkItem,
   type ChecklistStatus,
   type CreateWorkItemInput,
   type ProgressMethod,
@@ -34,7 +36,7 @@ import {
 } from '../../lib/work-items-client';
 import styles from './engineering.module.css';
 
-type ChecklistDraft = { title: string; assignee: string };
+type ChecklistDraft = { title: string; assignee: string; due: string };
 
 type WorkItemForm = {
   title: string;
@@ -65,8 +67,8 @@ function createEmptyForm(currentUserName: string, now = new Date()): WorkItemFor
     ...dates,
     progressMethod: 'checklist-count',
     checklist: [
-      { title: '', assignee: currentUserName },
-      { title: '', assignee: currentUserName },
+      { title: '', assignee: currentUserName, due: '' },
+      { title: '', assignee: currentUserName, due: '' },
     ],
   };
 }
@@ -126,6 +128,10 @@ export default function EngineeringWorkspace({
   const firstName = currentUserName.split(/\s+/)[0];
   const today = now ? localDateKey(now) : '';
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const isRelevantItem = (item: WorkItem) => canAccessWorkItem(item, {
+    name: currentUserName,
+    role: canManage ? 'admin' : 'engineer',
+  });
   const closeDetail = useCallback(() => setSelectedItemId(''), []);
   const openFromKeyboard = (event: React.KeyboardEvent, id: string) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -234,7 +240,7 @@ export default function EngineeringWorkspace({
     try {
       setSaving(true);
       const item = await createWorkItem(input);
-      setItems((current) => [item, ...current]);
+      setItems((current) => isRelevantItem(item) ? [item, ...current] : current);
       setShowCreate(false);
       setNotice(`${item.id} was created and is now visible to management.`);
     } catch (error) {
@@ -271,13 +277,12 @@ export default function EngineeringWorkspace({
   }
   async function saveDetailEdit(input: WorkItemEditInput) {
     const updated = await editWorkItem(input);
-    setItems((current) =>
-      current.map((candidate) => candidate.id === updated.id ? updated : candidate),
-    );
-    setNotice(`${updated.id} was edited.`);
+    setItems((current) => isRelevantItem(updated)
+      ? current.map((candidate) => candidate.id === updated.id ? updated : candidate)
+      : current.filter((candidate) => candidate.id !== updated.id));
+    setNotice(updated.id + ' was edited.');
     return updated;
   }
-
   async function changeSelectedArchive(archived: boolean) {
     if (!selectedItemId) throw new Error('No work item is selected.');
     const updated = await setWorkItemArchived(selectedItemId, archived);
@@ -353,11 +358,12 @@ export default function EngineeringWorkspace({
 
         <div className={styles.roleSwitch}>
           <span className={styles.avatar}>{initials}</span>
-          <span>
+          <span className={styles.profileCopy}>
             <strong>{currentUserName}</strong>
-            <small>Authenticated engineer</small>
+            <small>{canManage ? 'Administrator' : 'Engineer'}</small>
             {canManage ? <Link href="/management">Open management workspace</Link> : null}
           </span>
+          <SignOutButton className={styles.signOutButton} />
         </div>
       </aside>
 
@@ -530,6 +536,7 @@ export default function EngineeringWorkspace({
                         <span className={`${styles.stepStatus} ${styles[step.status]}`}>
                           {checklistStatusLabels[step.status]}
                         </span>
+                        <span>{step.due ? dueCopy(step.due, today) : 'No due date'}</span>
                         <span>Owner: {item.owner}</span>
                       </footer>
                     </div>
@@ -641,15 +648,16 @@ export default function EngineeringWorkspace({
                 <div className={styles.checklistEditor}>
                   <div className={styles.checklistHeader}>
                     <span>Checklist actions</span>
-                    <button type="button" onClick={() => setForm((current) => ({ ...current, checklist: [...current.checklist, { title: '', assignee: currentUserName }] }))}>＋ Add action</button>
+                    <button type="button" onClick={() => setForm((current) => ({ ...current, checklist: [...current.checklist, { title: '', assignee: currentUserName, due: '' }] }))}>＋ Add action</button>
                   </div>
                   {form.checklist.map((step, index) => (
                     <div className={styles.checklistRow} key={index}>
                       <span>{index + 1}</span>
                       <input value={step.title} onChange={(event) => updateChecklistDraft(index, 'title', event.target.value)} placeholder="Action or handoff" aria-label={`Checklist action ${index + 1}`} />
-                      <select value={step.assignee} onChange={(event) => updateChecklistDraft(index, 'assignee', event.target.value)} aria-label={`Assignee for action ${index + 1}`}>
+                      <select value={step.assignee} onChange={(event) => updateChecklistDraft(index, 'assignee', event.target.value)} aria-label={'Assignee for action ' + (index + 1)}>
                         {people.map((engineer) => <option key={engineer}>{engineer}</option>)}
                       </select>
+                      <input type="date" value={step.due} onChange={(event) => updateChecklistDraft(index, 'due', event.target.value)} aria-label={'Due date for action ' + (index + 1)} />
                       <button type="button" aria-label={`Remove checklist action ${index + 1}`} onClick={() => setForm((current) => ({ ...current, checklist: current.checklist.filter((_, stepIndex) => stepIndex !== index) }))}>×</button>
                     </div>
                   ))}
@@ -678,8 +686,8 @@ export default function EngineeringWorkspace({
         onDelete={deleteSelected}
         canUpdateStatus={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
         canUpdateChecklist={(step) => Boolean(selectedItem && !selectedItem.archivedAt && (canManage || step.assignee === currentUserName))}
-        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
-        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
+        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName))}
         canDelete={Boolean(canManage && selectedItem?.archivedAt)}
         allowAllChecklistStatuses={canManage}
       />

@@ -9,8 +9,14 @@ import {
   localDateKey,
 } from '../lib/local-time';
 import { buildTimeline, timelinePosition } from '../lib/work-schedule';
-import { createWorkItemHandlers, validateWorkItemPatch } from '../lib/work-items-api';
-import type { WorkItem, WorkItemPatch } from '../lib/work-items';
+import {
+  createWorkItemHandlers,
+  validateCreateWorkItem,
+  validateWorkItemEdit,
+  validateWorkItemPatch,
+} from '../lib/work-items-api';
+import { filterWorkItemActivity, type WorkItem, type WorkItemActivity, type WorkItemPatch } from '../lib/work-items';
+import { input } from './helpers/contract';
 
 function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
   return {
@@ -46,6 +52,7 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
       status: 'open',
       weight: 1,
       position: 0,
+      due: '2026-02-05',
     }],
     ...overrides,
   };
@@ -110,6 +117,69 @@ test('PATCH runtime validation rejects invalid workflow and checklist states', (
       checklistStep: { id: 'step-1', status: 'done' },
     },
   });
+});
+
+test('create and edit validation normalize optional checklist dates and reject impossible dates', () => {
+  const created = validateCreateWorkItem({
+    ...input,
+    checklist: [{ ...input.checklist[0], due: '   ' }],
+  });
+  assert.ok('input' in created);
+  assert.equal(created.input?.checklist[0].due, null);
+  assert.ok('error' in validateCreateWorkItem({ ...input, due: '2026-02-30' }));
+  assert.ok('error' in validateCreateWorkItem({
+    ...input,
+    checklist: [{ ...input.checklist[0], due: '2026-02-30' }],
+  }));
+
+  const item = workItem();
+  const edit = {
+    id: item.id,
+    title: item.title,
+    type: item.type,
+    team: item.team,
+    owner: item.owner,
+    priority: item.priority,
+    purpose: item.purpose,
+    expectedResult: item.expectedResult,
+    linkedGoal: item.linkedGoal ?? '',
+    start: item.start,
+    due: item.due,
+    progressMethod: item.progressMethod,
+    progress: item.progress,
+    checklist: item.checklist.map((step) => ({
+      id: '00000000-0000-4000-8000-000000000001',
+      title: step.title,
+      assignee: step.assignee,
+      due: '',
+      weight: step.weight,
+    })),
+  };
+  const edited = validateWorkItemEdit(edit);
+  assert.ok('input' in edited);
+  assert.equal(edited.input?.checklist[0].due, null);
+  assert.ok('error' in validateWorkItemEdit({
+    ...edit,
+    checklist: [{ ...edit.checklist[0], due: '2026-04-31' }],
+  }));
+});
+
+test('activity filters separate comments from other events without changing the full feed', () => {
+  const entries: WorkItemActivity[] = [
+    {
+      id: 'activity-1', workItemId: 'PROP-001', type: 'comment', authorUserId: null,
+      authorName: 'Owner Engineer', body: 'Reviewed.', checklistStepId: null,
+      checklistTitle: null, createdAt: '2026-02-01T08:00:00.000Z',
+    },
+    {
+      id: 'activity-2', workItemId: 'PROP-001', type: 'edited', authorUserId: null,
+      authorName: 'Owner Engineer', body: 'Changed due date.', checklistStepId: null,
+      checklistTitle: null, createdAt: '2026-02-01T09:00:00.000Z',
+    },
+  ];
+  assert.deepEqual(filterWorkItemActivity(entries, 'everything'), entries);
+  assert.deepEqual(filterWorkItemActivity(entries, 'comments'), [entries[0]]);
+  assert.deepEqual(filterWorkItemActivity(entries, 'activity'), [entries[1]]);
 });
 
 test('engineers can update owned workflow and assigned actions only', async () => {

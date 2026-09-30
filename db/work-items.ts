@@ -37,6 +37,10 @@ export class WorkItemMutationError extends Error {
   }
 }
 
+function hydrateDate(value: string | Date | null) {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+}
+
 function hydrateItems(itemRows: WorkItemRow[], checklistRows: ChecklistRow[]): WorkItem[] {
   return itemRows.map((row) => ({
     id: row.id,
@@ -70,6 +74,7 @@ function hydrateItems(itemRows: WorkItemRow[], checklistRows: ChecklistRow[]): W
         workItemId: step.work_item_id,
         title: step.title,
         assignee: step.assignee,
+        due: hydrateDate(step.due_date),
         status: step.status,
         weight: step.weight,
         position: step.position,
@@ -138,7 +143,7 @@ async function nextWorkItemId(client: Queryable, team: string) {
 }
 
 function canManageItem(item: WorkItem, actor: WorkItemActor) {
-  return actor.role === 'admin' || item.owner === actor.name || item.createdBy === actor.name;
+  return actor.role === 'admin' || item.owner === actor.name;
 }
 
 function assertEditable(item: WorkItem) {
@@ -202,13 +207,18 @@ function editFieldChanges(existing: WorkItem, input: WorkItemEditInput) {
     ['expected result', existing.expectedResult, input.expectedResult.trim()],
     ['linked goal', existing.linkedGoal ?? '', input.linkedGoal?.trim() ?? ''],
     ['start date', existing.start, input.start],
-    ['due date', existing.due, input.due],
     ['progress method', existing.progressMethod, input.progressMethod],
   ];
   if (input.progress !== undefined && input.progress !== existing.progress) {
     checks.push(['progress', existing.progress, input.progress]);
   }
   return checks.filter(([, before, after]) => before !== after).map(([label]) => label);
+}
+
+function describeDueDateChange(subject: string, before: string | null, after: string | null) {
+  if (!before && after) return `Set ${subject} to ${after}.`;
+  if (before && !after) return `Cleared ${subject} (was ${before}).`;
+  return `Changed ${subject} from ${before} to ${after}.`;
 }
 
 async function calculateChecklistProgress(client: Queryable, itemId: string) {
@@ -281,9 +291,12 @@ export function createWorkItemRepository(db: Database) {
         const checklist = input.checklist.filter((step) => step.title.trim());
         for (const [position, step] of checklist.entries()) {
           await client.query(`
-            INSERT INTO checklist_steps (id, work_item_id, title, assignee, status, weight, position)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
-          `, [randomUUID(), id, step.title.trim(), step.assignee, 'open', step.weight ?? 1, position]);
+            INSERT INTO checklist_steps (id, work_item_id, title, assignee, due_date, status, weight, position)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `, [
+            randomUUID(), id, step.title.trim(), step.assignee, step.due,
+            'open', step.weight ?? 1, position,
+          ]);
         }
         await appendActivity(client, id, mutationActor, 'created', 'Created the work item.');
         return (await readItem(client, id))!;
@@ -390,16 +403,36 @@ export function createWorkItemRepository(db: Database) {
           throw new WorkItemMutationError('invalid', 'A checklist action does not belong to this work item.');
         }
 
+        const preparedChecklist = input.checklist.map((step, position) => {
+          const current = step.id
+            ? existing.checklist.find((candidate) => candidate.id === step.id) ?? null
+            : null;
+          return {
+            ...step,
+            id: step.id ?? randomUUID(),
+            position,
+            current,
+          };
+        });
         const fieldChanges = editFieldChanges(existing, input);
-        const checklistChanged = input.checklist.length !== existing.checklist.length
-          || input.checklist.some((step, index) => {
-            const current = step.id ? existing.checklist.find((candidate) => candidate.id === step.id) : null;
-            return !current
-              || current.position !== index
-              || current.title !== step.title.trim()
-              || current.assignee !== step.assignee
-              || current.weight !== (step.weight ?? current.weight);
-          });
+        const cardDueChanged = existing.due !== input.due;
+        const checklistDetailsChanged = input.checklist.length !== existing.checklist.length
+          || preparedChecklist.some((step) => (
+            !step.current
+            || step.current.position !== step.position
+            || step.current.title !== step.title.trim()
+            || step.current.assignee !== step.assignee
+            || step.current.weight !== (step.weight ?? step.current.weight)
+          ));
+        const checklistDueChanges = preparedChecklist
+          .filter((step) => (step.current?.due ?? null) !== step.due)
+          .map((step) => ({
+            id: step.id,
+            title: step.title.trim(),
+            before: step.current?.due ?? null,
+            after: step.due,
+          }));
+        const checklistChanged = checklistDetailsChanged || checklistDueChanges.length > 0;
 
         for (const existingStep of existing.checklist) {
           if (!suppliedIds.includes(existingStep.id)) {
@@ -409,25 +442,30 @@ export function createWorkItemRepository(db: Database) {
             );
           }
         }
-        for (const [position, step] of input.checklist.entries()) {
-          if (step.id) {
+        for (const step of preparedChecklist) {
+          if (step.current) {
             await client.query(`
               UPDATE checklist_steps
-                 SET title = $1, assignee = $2, weight = $3, position = $4
-               WHERE id = $5 AND work_item_id = $6
+                 SET title = $1, assignee = $2, weight = $3, due_date = $4, position = $5
+               WHERE id = $6 AND work_item_id = $7
             `, [
               step.title.trim(),
               step.assignee,
-              step.weight ?? existing.checklist.find((candidate) => candidate.id === step.id)?.weight ?? 1,
-              position,
+              step.weight ?? step.current.weight,
+              step.due,
+              step.position,
               step.id,
               input.id,
             ]);
           } else {
             await client.query(`
-              INSERT INTO checklist_steps (id, work_item_id, title, assignee, status, weight, position)
-              VALUES ($1,$2,$3,$4,'open',$5,$6)
-            `, [randomUUID(), input.id, step.title.trim(), step.assignee, step.weight ?? 1, position]);
+              INSERT INTO checklist_steps (
+                id, work_item_id, title, assignee, due_date, status, weight, position
+              ) VALUES ($1,$2,$3,$4,$5,'open',$6,$7)
+            `, [
+              step.id, input.id, step.title.trim(), step.assignee,
+              step.due, step.weight ?? 1, step.position,
+            ]);
           }
         }
 
@@ -438,7 +476,12 @@ export function createWorkItemRepository(db: Database) {
         if (existing.status === 'done') progress = 100;
         const progressChanged = Math.round(progress) !== existing.progress;
 
-        if (!fieldChanges.length && !checklistChanged && !progressChanged) return existing;
+        if (
+          !fieldChanges.length
+          && !cardDueChanged
+          && !checklistChanged
+          && !progressChanged
+        ) return existing;
 
         await client.query(`
           UPDATE work_items
@@ -466,15 +509,41 @@ export function createWorkItemRepository(db: Database) {
         ]);
 
         const changedLabels = [...fieldChanges];
-        if (checklistChanged) changedLabels.push('checklist');
+        if (checklistDetailsChanged) changedLabels.push('checklist');
         if (progressChanged && !changedLabels.includes('progress')) changedLabels.push('progress');
-        await appendActivity(
-          client,
-          input.id,
-          actor,
-          'edited',
-          `Edited ${changedLabels.join(', ')}.`,
-        );
+        if (changedLabels.length) {
+          await appendActivity(
+            client,
+            input.id,
+            actor,
+            'edited',
+            `Edited ${changedLabels.join(', ')}.`,
+          );
+        }
+        if (cardDueChanged) {
+          await appendActivity(
+            client,
+            input.id,
+            actor,
+            'edited',
+            describeDueDateChange('work-card due date', existing.due, input.due),
+          );
+        }
+        for (const change of checklistDueChanges) {
+          await appendActivity(
+            client,
+            input.id,
+            actor,
+            'checklist',
+            describeDueDateChange(
+              `due date for checklist item “${change.title}”`,
+              change.before,
+              change.after,
+            ),
+            change.id,
+            change.title,
+          );
+        }
         return (await readItem(client, input.id))!;
       });
     },

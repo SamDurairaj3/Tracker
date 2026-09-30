@@ -35,6 +35,35 @@
 
 .backLink:hover { color: white; }
 
+.headerNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.headerAccount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #c2d9d0;
+  font-size: 11px;
+  font-weight: 750;
+}
+.signOutButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 9px;
+  color: white;
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.signOutButton:hover { background: rgb(255 255 255 / 12%); }
+.signOutButton:disabled { cursor: wait; opacity: 0.6; }
+
 .eyebrow {
   margin: 0 0 8px;
   color: #368166;
@@ -388,6 +417,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .headerInner,
   .content { width: min(100% - 24px, 1220px); }
   .headerInner { padding-bottom: 42px; }
+  .headerAccount > span { display: none; }
   .titleRow { align-items: flex-start; flex-direction: column; }
   .primaryButton { width: 100%; }
   .metrics article { min-height: 98px; padding: 17px; }

@@ -46,6 +46,7 @@ export type ChecklistStep = {
   workItemId: string;
   title: string;
   assignee: string;
+  due: string | null;
   status: ChecklistStatus;
   weight: number;
   position: number;
@@ -85,7 +86,6 @@ export function canAccessWorkItem(
 ) {
   return actor.role === 'admin'
     || item.owner === actor.name
-    || item.createdBy === actor.name
     || item.checklist.some((step) => step.assignee === actor.name);
 }
 
@@ -101,9 +101,21 @@ export type WorkItemActivity = {
   createdAt: string;
 };
 
+export type WorkItemActivityFilter = 'everything' | 'activity' | 'comments';
+
+export function filterWorkItemActivity(
+  entries: WorkItemActivity[],
+  filter: WorkItemActivityFilter,
+) {
+  if (filter === 'comments') return entries.filter((entry) => entry.type === 'comment');
+  if (filter === 'activity') return entries.filter((entry) => entry.type !== 'comment');
+  return entries;
+}
+
 export type ChecklistStepInput = {
   title: string;
   assignee: string;
+  due: string | null;
   weight?: number;
 };
 
@@ -140,6 +152,7 @@ export type WorkItemEditChecklistInput = {
   id?: string;
   title: string;
   assignee: string;
+  due: string | null;
   weight?: number;
 };
 

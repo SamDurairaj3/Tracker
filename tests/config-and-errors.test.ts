@@ -69,7 +69,7 @@ test('failed migration rolls back schema and migration history together', async 
       "SELECT to_regclass('should_rollback')::text AS created, to_regclass('tracker_schema_migrations')::text AS history",
     );
     assert.deepEqual(rows, [{ created: null, history: null }]);
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql']);
   } finally { await close(); }
 });
 

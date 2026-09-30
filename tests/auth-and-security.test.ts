@@ -130,7 +130,7 @@ test('work-item creation always uses the authenticated display name', async () =
 test('auth migration is explicit and creates every Better Auth table', async () => {
   const { db, close } = memoryPostgres();
   try {
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql']);
     const { rows } = await db.query<{ name: string | null }>(`
       SELECT to_regclass(name)::text AS name
       FROM unnest(ARRAY[

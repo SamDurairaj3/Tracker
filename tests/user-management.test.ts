@@ -194,8 +194,8 @@ test('profile rename atomically migrates exact work references and revokes sessi
       createdBy: 'Old Name',
       purpose: 'Old Name remains in descriptive text.',
       checklist: [
-        { title: 'Owned action', assignee: 'Old Name' },
-        { title: 'Unrelated action', assignee: 'Old Name Extended' },
+        { title: 'Owned action', assignee: 'Old Name', due: null },
+        { title: 'Unrelated action', assignee: 'Old Name Extended', due: null },
       ],
     });
     const service = deterministicService(db);

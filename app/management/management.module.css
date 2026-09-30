@@ -1088,8 +1088,7 @@
   }
 
   .nav a:nth-of-type(n + 3),
-  .navLabel,
-  .roleSwitch {
+  .navLabel {
     display: none;
   }
 
@@ -1177,3 +1176,38 @@
   font-size: 8px;
 }
 .archivedCard { opacity: 0.72; border: 1px dashed #a7b2ac; background: #f1f3f1; }
+
+.profileCopy { min-width: 0; flex: 1; }
+.signOutButton {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  color: #d7ebe3;
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.signOutButton:hover { background: rgb(255 255 255 / 9%); }
+.signOutButton:disabled { cursor: wait; opacity: 0.6; }
+
+@media (max-width: 1080px) {
+  .profileCopy { display: none; }
+  .roleSwitch { flex-wrap: wrap; }
+  .signOutButton { width: 100%; padding-inline: 4px; font-size: 8px; }
+}
+
+@media (max-width: 720px) {
+  .roleSwitch {
+    display: flex;
+    margin: 0 0 0 6px;
+    padding: 0;
+    border: 0;
+  }
+  .roleSwitch .avatar,
+  .profileCopy { display: none; }
+  .signOutButton { width: auto; min-height: 34px; padding-inline: 8px; }
+}

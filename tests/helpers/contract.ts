@@ -5,7 +5,7 @@ import { migrate } from '../../db/migrate';
 import { seedDemo } from '../../db/seed';
 import { createWorkItemRepository } from '../../db/work-items';
 import { createWorkItemHandlers } from '../../lib/work-items-api';
-import type { CreateWorkItemInput, WorkItem } from '../../lib/work-items';
+import type { CreateWorkItemInput, WorkItem, WorkItemEditInput } from '../../lib/work-items';
 
 export const input: CreateWorkItemInput = {
   title: '  Test pressure model  ', team: 'Propulsion', owner: 'Arjun Menon',
@@ -14,9 +14,9 @@ export const input: CreateWorkItemInput = {
   expectedResult: '  Reviewed result  ', linkedGoal: '  Flight readiness  ',
   progressMethod: 'checklist-count',
   checklist: [
-    { title: '  Measure  ', assignee: 'Arjun Menon', weight: 2 },
-    { title: '   ', assignee: 'Meera Shah' },
-    { title: 'Review', assignee: 'Meera Shah' },
+    { title: '  Measure  ', assignee: 'Arjun Menon', weight: 2, due: '2026-09-19' },
+    { title: '   ', assignee: 'Meera Shah', due: null },
+    { title: 'Review', assignee: 'Meera Shah', due: null },
   ],
 };
 
@@ -52,7 +52,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     });
 
     it('detects edited migration history', async () => {
-      const migrationName = '0003_work_item_lifecycle.sql';
+      const migrationName = '0004_checklist_due_dates.sql';
       const { rows } = await db.query<{ checksum: string }>(
         'SELECT checksum FROM tracker_schema_migrations WHERE name = $1',
         [migrationName],
@@ -80,12 +80,92 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
         archivedAt: null, archivedByName: null,
         activityCount: 1, latestActivityAt: item.latestActivityAt,
         checklist: [
-          { id: item.checklist[0].id, workItemId: item.id, title: 'Measure', assignee: 'Arjun Menon', status: 'open', weight: 2, position: 0 },
-          { id: item.checklist[1].id, workItemId: item.id, title: 'Review', assignee: 'Meera Shah', status: 'open', weight: 1, position: 1 },
+          { id: item.checklist[0].id, workItemId: item.id, title: 'Measure', assignee: 'Arjun Menon', status: 'open', weight: 2, position: 0, due: '2026-09-19' },
+          { id: item.checklist[1].id, workItemId: item.id, title: 'Review', assignee: 'Meera Shah', status: 'open', weight: 1, position: 1, due: null },
         ],
       });
       assert.match(item.createdAt, /^\d{4}-\d{2}-\d{2}T.*Z$/);
       assert.deepEqual(await repository.listWorkItems(), [item]);
+    });
+
+    it('round-trips checklist deadlines and preserves explicit deadline activity after step deletion', async () => {
+      const actor = { id: null, name: 'Arjun Menon', role: 'admin' as const };
+      let item = await repository.insertWorkItem(input, actor);
+      const editPayload = (candidate: WorkItem): WorkItemEditInput => ({
+        id: candidate.id,
+        title: candidate.title,
+        type: candidate.type,
+        team: candidate.team,
+        owner: candidate.owner,
+        priority: candidate.priority,
+        purpose: candidate.purpose,
+        expectedResult: candidate.expectedResult,
+        linkedGoal: candidate.linkedGoal ?? '',
+        start: candidate.start,
+        due: candidate.due,
+        progressMethod: candidate.progressMethod,
+        progress: candidate.progress,
+        checklist: candidate.checklist.map((step) => ({
+          id: step.id,
+          title: step.title,
+          assignee: step.assignee,
+          due: step.due,
+          weight: step.weight,
+        })),
+      });
+
+      item = await repository.editWorkItem({
+        ...editPayload(item),
+        due: '2026-09-23',
+        checklist: item.checklist.map((step) => ({
+          id: step.id,
+          title: step.title,
+          assignee: step.assignee,
+          weight: step.weight,
+          due: step.title === 'Measure' ? '2026-09-20' : '2026-09-22',
+        })),
+      }, actor);
+      assert.deepEqual(item.checklist.map((step) => step.due), ['2026-09-20', '2026-09-22']);
+
+      let activity = await repository.listWorkItemActivity(item.id);
+      const deadlineBodies = activity.map((entry) => entry.body);
+      assert.ok(deadlineBodies.includes('Changed work-card due date from 2026-09-21 to 2026-09-23.'));
+      assert.ok(deadlineBodies.includes('Changed due date for checklist item “Measure” from 2026-09-19 to 2026-09-20.'));
+      assert.ok(deadlineBodies.includes('Set due date for checklist item “Review” to 2026-09-22.'));
+      assert.equal(activity.filter((entry) => entry.body.startsWith('Edited ')).length, 0);
+
+      item = await repository.editWorkItem({
+        ...editPayload(item),
+        checklist: item.checklist.map((step) => ({
+          id: step.id,
+          title: step.title,
+          assignee: step.assignee,
+          weight: step.weight,
+          due: step.title === 'Review' ? null : step.due,
+        })),
+      }, actor);
+      activity = await repository.listWorkItemActivity(item.id);
+      assert.ok(activity.some((entry) => (
+        entry.body === 'Cleared due date for checklist item “Review” (was 2026-09-22).'
+      )));
+
+      item = await repository.editWorkItem({
+        ...editPayload(item),
+        checklist: item.checklist.filter((step) => step.title !== 'Review').map((step) => ({
+          id: step.id,
+          title: step.title,
+          assignee: step.assignee,
+          due: step.due,
+          weight: step.weight,
+        })),
+      }, actor);
+      assert.equal(item.checklist.length, 1);
+      activity = await repository.listWorkItemActivity(item.id);
+      const reviewDeadlineEvents = activity.filter((entry) => (
+        entry.type === 'checklist' && entry.checklistTitle === 'Review'
+      ));
+      assert.ok(reviewDeadlineEvents.length >= 2);
+      assert.ok(reviewDeadlineEvents.every((entry) => entry.checklistStepId === null));
     });
 
     it('sorts by creation date and ID descending, and handles absent records', async () => {
@@ -98,7 +178,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
     });
 
     it('rolls back both the card and ID allocation when a checklist insert fails', async () => {
-      await assert.rejects(repository.insertWorkItem({ ...input, checklist: [input.checklist[0], { title: 'Invalid', assignee: undefined as unknown as string }] }));
+      await assert.rejects(repository.insertWorkItem({ ...input, checklist: [input.checklist[0], { title: 'Invalid', assignee: undefined as unknown as string, due: null }] }));
       assert.deepEqual(await repository.listWorkItems(), []);
       assert.equal((await repository.insertWorkItem(input)).id, 'PROP-001');
     });

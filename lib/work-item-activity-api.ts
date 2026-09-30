@@ -126,7 +126,6 @@ export function createWorkItemLifecycleHandlers(
       if (
         access.actor.role !== 'admin'
         && existing.owner !== access.actor.name
-        && existing.createdBy !== access.actor.name
       ) {
         return jsonError(ACCESS_DENIED, 403);
       }

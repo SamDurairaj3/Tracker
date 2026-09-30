@@ -63,6 +63,7 @@ function editPayload(item: WorkItem, changes: Partial<WorkItemEditInput> = {}): 
       id: step.id,
       title: step.title,
       assignee: step.assignee,
+      due: step.due,
       weight: step.weight,
     })),
     ...changes,
@@ -84,15 +85,15 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
     let item = await repository.insertWorkItem({
       ...input,
       owner: owner.name,
-      checklist: [{ title: 'Review evidence', assignee: contributor.name }],
+      checklist: [{ title: 'Review evidence', assignee: contributor.name, due: null }],
     }, creator);
     const checklistId = item.checklist[0].id;
     const otherItem = await repository.insertWorkItem({
       ...input,
-      title: 'Administrative follow-up',
+      title: 'Creator-assigned follow-up',
       owner: admin.name,
-      checklist: [{ title: 'Admin action', assignee: admin.name }],
-    }, admin);
+      checklist: [{ title: 'Creator action', assignee: creator.name, due: '2026-09-20' }],
+    }, creator);
 
     const anonymousActivity = createWorkItemActivityHandlers(repository, async () => null);
     assert.equal(
@@ -117,7 +118,7 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
       return (await response.json() as { items: WorkItem[] }).items.map((candidate) => candidate.id);
     }
 
-    assert.deepEqual(await listedIds(creatorApi), [item.id]);
+    assert.deepEqual(await listedIds(creatorApi), [otherItem.id]);
     assert.deepEqual(await listedIds(ownerApi), [item.id]);
     assert.deepEqual(await listedIds(contributorApi), [item.id]);
     assert.deepEqual(await listedIds(unrelatedApi), []);
@@ -175,13 +176,16 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
       'http://localhost/api/work-items/activity',
       'POST',
       { id: item.id, body: 'Creator context.' },
-    ))).status, 201);
+    ))).status, 403);
 
-    for (const activityApi of [creatorActivity, ownerActivity, contributorActivity]) {
+    for (const activityApi of [ownerActivity, contributorActivity]) {
       assert.equal((await activityApi.GET(request(
         'http://localhost/api/work-items/activity?id=' + item.id,
       ))).status, 200);
     }
+    assert.equal((await creatorActivity.GET(request(
+      'http://localhost/api/work-items/activity?id=' + item.id,
+    ))).status, 403);
     assert.equal((await unrelatedActivity.GET(request(
       'http://localhost/api/work-items/activity?id=' + item.id,
     ))).status, 403);
@@ -211,8 +215,20 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
       'PUT',
       editPayload(item, { title: 'Forbidden edit' }),
     ))).status, 403);
+    assert.equal((await creatorApi.PUT(request(
+      'http://localhost/api/work-items',
+      'PUT',
+      editPayload(item, { title: 'Creator edit' }),
+    ))).status, 403);
     const unrelatedLifecycle = createWorkItemLifecycleHandlers(repository, async () => unrelated);
+    const creatorLifecycle = createWorkItemLifecycleHandlers(repository, async () => creator);
+    const ownerLifecycle = createWorkItemLifecycleHandlers(repository, async () => owner);
     assert.equal((await unrelatedLifecycle.PATCH(request(
+      'http://localhost/api/work-items/lifecycle',
+      'PATCH',
+      { id: item.id, archived: true },
+    ))).status, 403);
+    assert.equal((await creatorLifecycle.PATCH(request(
       'http://localhost/api/work-items/lifecycle',
       'PATCH',
       { id: item.id, archived: true },
@@ -244,8 +260,7 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
     item = (await adminEdit.json() as { item: WorkItem }).item;
     assert.equal(item.priority, 'Critical');
 
-    const creatorLifecycle = createWorkItemLifecycleHandlers(repository, async () => creator);
-    const archiveResponse = await creatorLifecycle.PATCH(request(
+    const archiveResponse = await ownerLifecycle.PATCH(request(
       'http://localhost/api/work-items/lifecycle',
       'PATCH',
       { id: item.id, archived: true },
@@ -271,7 +286,7 @@ test('relevant users can discuss cards while unrelated users remain isolated', a
     assert.deepEqual(await listedIds(adminApi), [otherItem.id]);
     assert.deepEqual(await listedIds(adminApi, true), [otherItem.id, item.id]);
 
-    const restoreResponse = await creatorLifecycle.PATCH(request(
+    const restoreResponse = await ownerLifecycle.PATCH(request(
       'http://localhost/api/work-items/lifecycle',
       'PATCH',
       { id: item.id, archived: false },

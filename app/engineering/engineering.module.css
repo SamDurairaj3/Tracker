@@ -895,7 +895,7 @@
 
 .checklistRow {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 175px 28px;
+  grid-template-columns: 24px minmax(0, 1fr) 150px 132px 28px;
   gap: 7px;
   align-items: center;
 }
@@ -1001,7 +1001,7 @@
   .nav button { min-height: 36px; width: 36px; }
   .nav a:nth-of-type(n + 2),
   .nav .navLabel { display: none; }
-  .roleSwitch { display: none; }
+  .roleSwitch { display: flex; }
   .topbar { min-height: 70px; padding: 14px 17px; }
   .topbar h1 { font-size: 19px; }
   .primaryButton { padding-inline: 12px; font-size: 9px; }
@@ -1019,8 +1019,9 @@
   .formSection { margin-inline: 10px; padding: 14px; }
   .fieldGrid { grid-template-columns: 1fr; }
   .checklistRow { grid-template-columns: 20px minmax(0, 1fr) 28px; }
-  .checklistRow select { grid-column: 2 / 3; }
-  .checklistRow > button { grid-column: 3; grid-row: 1; }
+  .checklistRow select,
+  .checklistRow input[type='date'] { grid-column: 2 / 3; }
+  .checklistRow > button { grid-column: 3; grid-row: 1 / span 3; }
   .dialogFooter { flex-wrap: wrap; }
   .dialogFooter button { flex: 1; }
   .createButton { flex-basis: 100% !important; }
@@ -1034,3 +1035,38 @@
 .archiveToggle { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0 0 0.8rem; color: #60756b; font-size: 0.76rem; font-weight: 800; }
 .archiveToggle input { accent-color: #256c50; }
 .archivedCard { opacity: 0.72; border: 1px dashed #9eaaa4; border-radius: 12px; background: #eef1ef; overflow: hidden; }
+
+.profileCopy { min-width: 0; flex: 1; }
+.signOutButton {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  color: #d7ebe3;
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.signOutButton:hover { background: rgb(255 255 255 / 9%); }
+.signOutButton:disabled { cursor: wait; opacity: 0.6; }
+
+@media (max-width: 1080px) {
+  .profileCopy { display: none; }
+  .roleSwitch { flex-wrap: wrap; }
+  .signOutButton { width: 100%; padding-inline: 4px; font-size: 8px; }
+}
+
+@media (max-width: 640px) {
+  .roleSwitch {
+    display: flex;
+    margin: 0 0 0 6px;
+    padding: 0;
+    border: 0;
+  }
+  .roleSwitch .avatar,
+  .profileCopy { display: none; }
+  .signOutButton { width: auto; min-height: 34px; padding-inline: 8px; }
+}

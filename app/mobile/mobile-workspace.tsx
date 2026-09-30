@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
+import SignOutButton from '../components/sign-out-button';
 import {
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
   TEAMS,
+  canAccessWorkItem,
   type ChecklistStatus,
   type CreateWorkItemInput,
   type ProgressMethod,
@@ -15,7 +17,7 @@ import {
   type WorkItemType,
   type WorkPriority,
 } from '../../lib/work-items';
-import { calendarDayDifference, defaultWorkDates, formatLiveDateTime, greetingForHour, localDateKey } from '../../lib/local-time';
+import { calendarDayDifference, defaultWorkDates, dueCopy, formatLiveDateTime, greetingForHour, localDateKey } from '../../lib/local-time';
 import { useLiveNow } from '../../lib/use-live-now';
 import {
   createWorkItem,
@@ -28,7 +30,7 @@ import {
 import styles from './mobile.module.css';
 
 type HomeView = 'home' | 'work' | 'actions' | 'notifications';
-type ChecklistDraft = { id: string; title: string; assignee: string };
+type ChecklistDraft = { id: string; title: string; assignee: string; due: string };
 type MobileDraft = {
   title: string;
   type: WorkItemType;
@@ -78,7 +80,7 @@ function createClientDraftId() {
 }
 
 function newChecklistStep(currentUserName: string): ChecklistDraft {
-  return { id: createClientDraftId(), title: '', assignee: currentUserName };
+  return { id: createClientDraftId(), title: '', assignee: currentUserName, due: '' };
 }
 
 function createEmptyDraft(currentUserName: string, now = new Date()): MobileDraft {
@@ -96,6 +98,25 @@ function createEmptyDraft(currentUserName: string, now = new Date()): MobileDraf
     progressMethod: 'checklist-count',
     checklist: [newChecklistStep(currentUserName)],
   };
+}
+
+function hydrateMobileDraft(value: unknown, currentUserName: string) {
+  const fallback = createEmptyDraft(currentUserName, new Date());
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
+  const saved = value as Partial<MobileDraft>;
+  const checklist = Array.isArray(saved.checklist)
+    ? saved.checklist.flatMap((candidate) => {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+      const action = candidate as Partial<ChecklistDraft>;
+      return [{
+        id: typeof action.id === 'string' ? action.id : createClientDraftId(),
+        title: typeof action.title === 'string' ? action.title : '',
+        assignee: typeof action.assignee === 'string' ? action.assignee : currentUserName,
+        due: typeof action.due === 'string' ? action.due : '',
+      }];
+    })
+    : fallback.checklist;
+  return { ...fallback, ...saved, checklist } as MobileDraft;
 }
 
 function hasDraftContent(draft: MobileDraft) {
@@ -175,7 +196,7 @@ export default function MobileWorkspace({
       try {
         const savedDraft = window.localStorage.getItem(DRAFT_KEY);
         setDraft(savedDraft
-          ? JSON.parse(savedDraft) as MobileDraft
+          ? hydrateMobileDraft(JSON.parse(savedDraft) as unknown, currentUserName)
           : createEmptyDraft(currentUserName, new Date()));
       } catch {
         window.localStorage.removeItem(DRAFT_KEY);
@@ -246,6 +267,10 @@ export default function MobileWorkspace({
   const draftAvailable = hasDraftContent(draft);
   const today = now ? localDateKey(now) : '';
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const isRelevantItem = (item: WorkItem) => canAccessWorkItem(item, {
+    name: currentUserName,
+    role: canManage ? 'admin' : 'engineer',
+  });
   const closeDetail = useCallback(() => setSelectedItemId(''), []);
   const notifications = useMemo(() => {
     if (!today) return [];
@@ -258,27 +283,46 @@ export default function MobileWorkspace({
     }> = [];
 
     for (const { item, action } of openAssignedActions) {
-      signals.push({
-        key: `action:${action.id}`,
-        item,
-        title: action.status === 'blocked' ? 'Assigned action is blocked' : 'Assigned action is open',
-        detail: `${action.title} · ${item.id}`,
-        tone: action.status === 'blocked' ? 'urgent' : 'normal',
-      });
+      const days = action.due ? calendarDayDifference(today, action.due) : null;
+      if (action.status === 'blocked') {
+        signals.push({
+          key: 'action:' + action.id,
+          item,
+          title: 'Assigned action is blocked',
+          detail: action.title + ' · ' + item.id,
+          tone: 'urgent',
+        });
+      } else if (action.due && days !== null && days < 0) {
+        signals.push({
+          key: 'action:' + action.id,
+          item,
+          title: 'Assigned action is overdue',
+          detail: action.title + ' · ' + dueCopy(action.due, today) + ' · ' + item.id,
+          tone: 'urgent',
+        });
+      } else if (action.due && days !== null && days <= 2) {
+        signals.push({
+          key: 'action:' + action.id,
+          item,
+          title: days === 0 ? 'Assigned action is due today' : 'Assigned action is due soon',
+          detail: action.title + ' · ' + dueCopy(action.due, today) + ' · ' + item.id,
+          tone: 'attention',
+        });
+      }
     }
 
     for (const item of ownedWork) {
       const days = calendarDayDifference(today, item.due);
       if (item.health === 'blocked') {
-        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is blocked', detail: `${item.id} · ${item.title}`, tone: 'urgent' });
+        signals.push({ key: 'work:' + item.id, item, title: 'Owned work is blocked', detail: item.id + ' · ' + item.title, tone: 'urgent' });
       } else if (days !== null && days < 0) {
-        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is overdue', detail: `${item.id} · ${item.title}`, tone: 'urgent' });
+        signals.push({ key: 'work:' + item.id, item, title: 'Owned work is overdue', detail: item.id + ' · ' + item.title, tone: 'urgent' });
       } else if (item.health === 'at-risk') {
-        signals.push({ key: `work:${item.id}`, item, title: 'Owned work is at risk', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+        signals.push({ key: 'work:' + item.id, item, title: 'Owned work is at risk', detail: item.id + ' · ' + item.title, tone: 'attention' });
       } else if (item.status === 'review') {
-        signals.push({ key: `work:${item.id}`, item, title: 'Ready for your review follow-through', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+        signals.push({ key: 'work:' + item.id, item, title: 'Ready for your review follow-through', detail: item.id + ' · ' + item.title, tone: 'attention' });
       } else if (days !== null && days <= 2) {
-        signals.push({ key: `work:${item.id}`, item, title: days === 0 ? 'Owned work is due today' : 'Owned work is due soon', detail: `${item.id} · ${item.title}`, tone: 'attention' });
+        signals.push({ key: 'work:' + item.id, item, title: days === 0 ? 'Owned work is due today' : 'Owned work is due soon', detail: item.id + ' · ' + item.title, tone: 'attention' });
       }
     }
 
@@ -299,7 +343,7 @@ export default function MobileWorkspace({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function updateAction(id: string, field: 'title' | 'assignee', value: string) {
+  function updateAction(id: string, field: 'title' | 'assignee' | 'due', value: string) {
     setDraft((current) => ({
       ...current,
       checklist: current.checklist.map((action) =>
@@ -315,9 +359,14 @@ export default function MobileWorkspace({
   }, []);
   const saveMobileEdit = useCallback(async (input: WorkItemEditInput) => {
     const updated = await editWorkItem(input);
-    setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setItems((current) => canAccessWorkItem(updated, {
+      name: currentUserName,
+      role: canManage ? 'admin' : 'engineer',
+    })
+      ? current.map((item) => item.id === updated.id ? updated : item)
+      : current.filter((item) => item.id !== updated.id));
     return updated;
-  }, []);
+  }, [canManage, currentUserName]);
 
   async function changeMobileArchive(archived: boolean) {
     if (!selectedItemId) throw new Error('No work item is selected.');
@@ -414,7 +463,7 @@ export default function MobileWorkspace({
       progressMethod: draft.progressMethod,
       checklist: draft.checklist
         .filter((action) => action.title.trim())
-        .map(({ title, assignee }) => ({ title, assignee })),
+        .map(({ title, assignee, due }) => ({ title, assignee, due: due || null })),
       status,
       createdBy: currentUserName,
     };
@@ -423,7 +472,7 @@ export default function MobileWorkspace({
       setSaving(true);
       setFormError('');
       const item = await createWorkItem(input);
-      setItems((current) => [item, ...current]);
+      setItems((current) => isRelevantItem(item) ? [item, ...current] : current);
       setCreatedItem(item);
       window.localStorage.removeItem(DRAFT_KEY);
       setDraft(createEmptyDraft(currentUserName, new Date()));
@@ -573,7 +622,7 @@ export default function MobileWorkspace({
 
         {view === 'work' ? (
           <>
-            <ScreenHeading eyebrow="Responsibility" title="My cards" description="Work you own, created, or contribute to." />
+            <ScreenHeading eyebrow="Responsibility" title="My cards" description="Work you own or contribute to." />
             <label className={styles.archiveToggle}>
               <input
                 type="checkbox"
@@ -613,7 +662,11 @@ export default function MobileWorkspace({
                   >
                     <h2>{action.title}</h2>
                     <p>{item.id} · {item.title}</p>
-                    <footer><span>{action.status.replace('-', ' ')}</span><span>Owner · {item.owner}</span></footer>
+                    <footer>
+                      <span>{action.status.replace('-', ' ')}</span>
+                      <span>{action.due ? dueCopy(action.due, today) : 'No due date'}</span>
+                      <span>Owner · {item.owner}</span>
+                    </footer>
                   </div>
                 </article>
               ))}
@@ -625,6 +678,11 @@ export default function MobileWorkspace({
         {view === 'notifications' ? (
           <>
             <ScreenHeading eyebrow="Live attention" title="Notifications" description="Derived from current work and assignments. Nothing here is a fake unread or push notification." />
+            <section className={styles.accountCard} aria-label="Signed-in account">
+              <span className={styles.accountAvatar} aria-hidden="true">{initials}</span>
+              <span><strong>{currentUserName}</strong><small>{canManage ? 'Administrator' : 'Engineer'}</small></span>
+              <SignOutButton className={styles.accountSignOut} />
+            </section>
             <section className={styles.notificationList} aria-label="Current work attention">
               {notifications.map((signal) => (
                 <button key={signal.key} type="button" onClick={() => setSelectedItemId(signal.item.id)}>
@@ -665,8 +723,8 @@ export default function MobileWorkspace({
         onDelete={deleteMobileItem}
         canUpdateStatus={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
         canUpdateChecklist={(step) => Boolean(selectedItem && !selectedItem.archivedAt && (canManage || step.assignee === currentUserName))}
-        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
-        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName || selectedItem.createdBy === currentUserName))}
+        canEdit={Boolean(selectedItem && !selectedItem.archivedAt && (canManage || selectedItem.owner === currentUserName))}
+        canArchive={Boolean(selectedItem && (canManage || selectedItem.owner === currentUserName))}
         canDelete={Boolean(canManage && selectedItem?.archivedAt)}
         allowAllChecklistStatuses={canManage}
       />
@@ -754,7 +812,7 @@ function OwnershipStep({ draft, updateDraft, people }: StepProps & { people: str
   );
 }
 
-function ActionsStep({ draft, updateDraft, updateAction, people, currentUserName }: StepProps & { updateAction: (id: string, field: 'title' | 'assignee', value: string) => void; people: string[]; currentUserName: string }) {
+function ActionsStep({ draft, updateDraft, updateAction, people, currentUserName }: StepProps & { updateAction: (id: string, field: 'title' | 'assignee' | 'due', value: string) => void; people: string[]; currentUserName: string }) {
   return (
     <section className={styles.formStep}>
       <p className={styles.kicker}>Coordination</p><h1>How will progress be earned?</h1>
@@ -768,6 +826,7 @@ function ActionsStep({ draft, updateDraft, updateAction, people, currentUserName
             <div>
               <label><span>Action</span><input value={action.title} onChange={(event) => updateAction(action.id, 'title', event.target.value)} placeholder="Run three thermal cycles" /></label>
               <label><span>Assigned to</span><select value={action.assignee} onChange={(event) => updateAction(action.id, 'assignee', event.target.value)}>{people.map((engineer) => <option key={engineer}>{engineer}</option>)}</select></label>
+              <label><span>Due date <small>Optional</small></span><input type="date" value={action.due} onChange={(event) => updateAction(action.id, 'due', event.target.value)} /></label>
             </div>
             <button type="button" aria-label={`Remove action ${index + 1}`} onClick={() => updateDraft('checklist', draft.checklist.filter((candidate) => candidate.id !== action.id))}>×</button>
           </article>
@@ -787,7 +846,7 @@ function ReviewStep({ draft }: { draft: MobileDraft }) {
       <dl className={styles.reviewDetails}>
         <div><dt>Owner</dt><dd>{draft.owner}</dd></div><div><dt>Team</dt><dd>{draft.team}</dd></div><div><dt>Dates</dt><dd>{draft.start} → {draft.due}</dd></div><div><dt>Progress</dt><dd>{PROGRESS_METHOD_LABELS[draft.progressMethod]}</dd></div>{draft.linkedGoal ? <div><dt>Goal</dt><dd>{draft.linkedGoal}</dd></div> : null}
       </dl>
-      <section className={styles.reviewActions}><header><strong>{actions.length} assigned action{actions.length === 1 ? '' : 's'}</strong></header>{actions.map((action) => <div key={action.id}><span>○</span><p><strong>{action.title}</strong><small>{action.assignee}</small></p></div>)}</section>
+      <section className={styles.reviewActions}><header><strong>{actions.length} assigned action{actions.length === 1 ? '' : 's'}</strong></header>{actions.map((action) => <div key={action.id}><span>○</span><p><strong>{action.title}</strong><small>{action.assignee} · {action.due || 'No due date'}</small></p></div>)}</section>
     </section>
   );
 }

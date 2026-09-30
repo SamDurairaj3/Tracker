@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import type { ManagedUser } from '../../../db/user-management';
 import type { AuthRole } from '../../../lib/auth-config';
+import SignOutButton from '../../components/sign-out-button';
 import styles from './users.module.css';
 
 type Feedback = { tone: 'success' | 'error'; text: string } | null;
@@ -50,7 +51,13 @@ async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH', body?: unknown) {
   return payload;
 }
 
-export default function UserManagement({ currentUserId }: { currentUserId: string }) {
+export default function UserManagement({
+  currentUserId,
+  currentUserName,
+}: {
+  currentUserId: string;
+  currentUserName: string;
+}) {
   const router = useRouter();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +223,13 @@ export default function UserManagement({ currentUserId }: { currentUserId: strin
     <main className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Link href="/management" className={styles.backLink}>← Delivery overview</Link>
+          <div className={styles.headerNav}>
+            <Link href="/management" className={styles.backLink}>← Delivery overview</Link>
+            <div className={styles.headerAccount}>
+              <span>{currentUserName}</span>
+              <SignOutButton className={styles.signOutButton} />
+            </div>
+          </div>
           <p className={styles.eyebrow}>Administration / Access control</p>
           <div className={styles.titleRow}>
             <div>

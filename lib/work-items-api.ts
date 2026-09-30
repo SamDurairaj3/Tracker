@@ -11,6 +11,7 @@ import {
   isWorkStatus,
 } from './work-items';
 import type { createWorkItemRepository, WorkItemActor } from '../db/work-items';
+import { parseLocalDate } from './local-time';
 import { WorkItemMutationError } from '../db/work-items';
 
 type WorkItemApiRepository = Pick<
@@ -151,9 +152,16 @@ export function isChecklistStepId(value: unknown): value is string {
 }
 
 function validDate(value: unknown): value is string {
-  return typeof value === 'string'
-    && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  return typeof value === 'string' && parseLocalDate(value) !== null;
+}
+
+function optionalDate(value: unknown) {
+  if (value === undefined || value === null) return { valid: true, value: null } as const;
+  if (typeof value !== 'string') return { valid: false } as const;
+  const normalized = value.trim();
+  if (!normalized) return { valid: true, value: null } as const;
+  if (!validDate(normalized)) return { valid: false } as const;
+  return { valid: true, value: normalized } as const;
 }
 
 function requiredText(value: unknown, max: number): value is string {
@@ -171,6 +179,8 @@ function validateChecklistInput(value: unknown, allowIds: boolean) {
       return null;
     }
     if (!requiredText(step.assignee, 200)) return null;
+    const due = optionalDate(step.due);
+    if (!due.valid) return null;
     if (step.weight !== undefined && (
       typeof step.weight !== 'number'
       || !Number.isInteger(step.weight)
@@ -182,6 +192,7 @@ function validateChecklistInput(value: unknown, allowIds: boolean) {
       ...(typeof step.id === 'string' ? { id: step.id } : {}),
       title: step.title.trim(),
       assignee: step.assignee.trim(),
+      due: due.value,
       ...(typeof step.weight === 'number' ? { weight: step.weight } : {}),
     });
   }
@@ -444,7 +455,6 @@ export function createWorkItemHandlers(
       if (
         access.actor.role !== 'admin'
         && existing.owner !== access.actor.name
-        && existing.createdBy !== access.actor.name
       ) {
         return jsonError(ACCESS_DENIED, 403);
       }

@@ -37,9 +37,9 @@ export async function seedDemo(db: Database, environment: NodeJS.ProcessEnv, con
     }
     for (const [position, step] of seededChecklist.entries()) {
       await client.query(`
-        INSERT INTO checklist_steps (id, work_item_id, title, assignee, status, weight, position)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [step.id, step.workItemId, step.title, step.assignee, step.status, 1, position]);
+        INSERT INTO checklist_steps (id, work_item_id, title, assignee, due_date, status, weight, position)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `, [step.id, step.workItemId, step.title, step.assignee, step.due, step.status, 1, position]);
     }
     return seededWorkItems.length;
   });

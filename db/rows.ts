@@ -32,6 +32,7 @@ export type ChecklistRow = {
   work_item_id: string;
   title: string;
   assignee: string;
+  due_date: string | Date | null;
   status: ChecklistStatus;
   weight: number;
   position: number;

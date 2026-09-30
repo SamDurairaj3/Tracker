@@ -38,13 +38,13 @@ export const seededWorkItems: SeedWorkItem[] = [
 ];
 
 export const seededChecklist = [
-  { id: 'STEP-PROP142-1', workItemId: 'PROP-142', title: 'Normalize cold-flow test data', assignee: 'Arjun Menon', status: 'done' as const },
-  { id: 'STEP-PROP142-2', workItemId: 'PROP-142', title: 'Run pressure-drop correlation', assignee: 'Arjun Menon', status: 'in-progress' as const },
-  { id: 'STEP-PROP142-3', workItemId: 'PROP-142', title: 'Review residuals against acceptance band', assignee: 'Meera Shah', status: 'open' as const },
-  { id: 'STEP-PROP148-1', workItemId: 'PROP-148', title: 'Collect oscillation limits from test reports', assignee: 'Arjun Menon', status: 'open' as const },
-  { id: 'STEP-PROP148-2', workItemId: 'PROP-148', title: 'Confirm controls margin with GNC', assignee: 'Kabir Singh', status: 'open' as const },
-  { id: 'STEP-STR089-1', workItemId: 'STR-089', title: 'Supply revised propulsion interface loads', assignee: 'Arjun Menon', status: 'blocked' as const },
-  { id: 'STEP-STR087-1', workItemId: 'STR-087', title: 'Review propulsion-side load assumptions', assignee: 'Arjun Menon', status: 'in-progress' as const },
+  { id: 'STEP-PROP142-1', workItemId: 'PROP-142', title: 'Normalize cold-flow test data', assignee: 'Arjun Menon', due: '2026-08-25', status: 'done' as const },
+  { id: 'STEP-PROP142-2', workItemId: 'PROP-142', title: 'Run pressure-drop correlation', assignee: 'Arjun Menon', due: '2026-09-01', status: 'in-progress' as const },
+  { id: 'STEP-PROP142-3', workItemId: 'PROP-142', title: 'Review residuals against acceptance band', assignee: 'Meera Shah', due: '2026-09-03', status: 'open' as const },
+  { id: 'STEP-PROP148-1', workItemId: 'PROP-148', title: 'Collect oscillation limits from test reports', assignee: 'Arjun Menon', due: '2026-09-04', status: 'open' as const },
+  { id: 'STEP-PROP148-2', workItemId: 'PROP-148', title: 'Confirm controls margin with GNC', assignee: 'Kabir Singh', due: null, status: 'open' as const },
+  { id: 'STEP-STR089-1', workItemId: 'STR-089', title: 'Supply revised propulsion interface loads', assignee: 'Arjun Menon', due: '2026-08-30', status: 'blocked' as const },
+  { id: 'STEP-STR087-1', workItemId: 'STR-087', title: 'Review propulsion-side load assumptions', assignee: 'Arjun Menon', due: '2026-08-28', status: 'in-progress' as const },
 ];
 
 

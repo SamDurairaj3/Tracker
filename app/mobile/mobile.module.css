@@ -1195,3 +1195,45 @@
 .archiveToggle { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; color: #61756b; font-size: 12px; font-weight: 800; }
 .archiveToggle input { accent-color: #256c50; }
 .archivedCard { opacity: 0.72; border: 1px dashed #9aa8a1; border-radius: 14px; background: #edf1ef; overflow: hidden; }
+
+.accountCard {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: white;
+}
+.accountAvatar {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #174d39;
+  background: #d9f0e5;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.accountCard > span:nth-child(2) { min-width: 0; }
+.accountCard strong,
+.accountCard small { display: block; }
+.accountCard strong { overflow: hidden; font-size: 0.86rem; text-overflow: ellipsis; white-space: nowrap; }
+.accountCard small { margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; }
+.accountSignOut {
+  min-height: 2.35rem;
+  padding: 0 0.75rem;
+  border: 1px solid #c7d8d0;
+  border-radius: 0.65rem;
+  color: #285b47;
+  background: #f6faf8;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+.accountSignOut:disabled { cursor: wait; opacity: 0.6; }
+.actionList footer { flex-wrap: wrap; }

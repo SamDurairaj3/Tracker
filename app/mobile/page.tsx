@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import AccountBar from '../components/account-bar';
 import { listActiveUserNames } from '../../db/auth-users';
 import { requireIdentity } from '../../lib/auth-session';
 import MobileWorkspace from './mobile-workspace';
@@ -23,5 +22,5 @@ export const viewport: Viewport = {
 export default async function MobilePage() {
   const identity = await requireIdentity('/mobile');
   const activeUserNames = await listActiveUserNames();
-  return <><AccountBar identity={identity} /><MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} /></>;
+  return <MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} />;
 }

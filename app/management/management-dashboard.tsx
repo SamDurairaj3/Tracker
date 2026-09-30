@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
+import SignOutButton from '../components/sign-out-button';
 import { buildTimeline, timelinePosition } from '../../lib/work-schedule';
 import { useLiveNow } from '../../lib/use-live-now';
 import {
@@ -32,8 +33,10 @@ const healthLabels: Record<WorkHealth, string> = {
 };
 
 export default function ManagementDashboard({
+  currentUserName,
   activeUserNames,
 }: {
+  currentUserName: string;
   activeUserNames: string[];
 }) {
   const [view, setView] = useState<ViewMode>('kanban');
@@ -185,12 +188,15 @@ export default function ManagementDashboard({
         </nav>
 
         <div className={styles.roleSwitch}>
-          <span className={styles.avatar}>MG</span>
-          <span>
-            <strong>Management workspace</strong>
-            <small>Organization-wide view</small>
+          <span className={styles.avatar}>
+            {currentUserName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
+          </span>
+          <span className={styles.profileCopy}>
+            <strong>{currentUserName}</strong>
+            <small>Administrator</small>
             <Link href="/engineering">Open engineering workspace</Link>
           </span>
+          <SignOutButton className={styles.signOutButton} />
         </div>
       </aside>
 

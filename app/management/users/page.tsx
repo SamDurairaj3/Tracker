@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import AccountBar from '../../components/account-bar';
 import { requireAdmin } from '../../../lib/auth-session';
 import UserManagement from './user-management';
 
@@ -13,10 +12,5 @@ export const metadata: Metadata = {
 
 export default async function UserManagementPage() {
   const identity = await requireAdmin('/management/users');
-  return (
-    <>
-      <AccountBar identity={identity} />
-      <UserManagement currentUserId={identity.id} />
-    </>
-  );
+  return <UserManagement currentUserId={identity.id} currentUserName={identity.name} />;
 }
