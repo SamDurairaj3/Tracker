@@ -29,6 +29,10 @@ case "$command" in
       echo 'Authentication secret is missing; run prepare.sh first' >&2
       exit 1
     }
+    [ -s "$script_dir/secrets/vapid_private_key.pem" ] || {
+      echo 'Web Push private key is missing; run prepare.sh first' >&2
+      exit 1
+    }
     compose config --quiet
     tunnel_compose config --quiet
     compose ps --status running --services | grep -qx web || {

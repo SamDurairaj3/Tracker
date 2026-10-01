@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
+import WorkItemCreateDialog from '../components/work-item-create-dialog';
 import SignOutButton from '../components/sign-out-button';
 import { buildTimeline, timelinePosition } from '../../lib/work-schedule';
 import { useLiveNow } from '../../lib/use-live-now';
@@ -47,6 +48,7 @@ export default function ManagementDashboard({
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loadError, setLoadError] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const now = useLiveNow();
 
   const refreshWorkItems = useCallback(async () => {
@@ -114,6 +116,7 @@ export default function ManagementDashboard({
     [filteredItems, now],
   );
   const closeDetail = useCallback(() => setSelectedItemId(''), []);
+  const closeCreate = useCallback(() => setShowCreate(false), []);
   const saveUpdate = useCallback(async (patch: WorkItemPatch) => {
     const updated = await updateWorkItem(patch);
     setWorkItems((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -208,10 +211,10 @@ export default function ManagementDashboard({
           </div>
           <div className={styles.headerActions}>
             <button className={styles.secondaryButton} type="button">
-              Export review
+              Weekly integration review
             </button>
-            <button className={styles.primaryButton} type="button">
-              Weekly integration review <span aria-hidden="true">→</span>
+            <button className={styles.primaryButton} type="button" onClick={() => setShowCreate(true)}>
+              Create work card <span aria-hidden="true">＋</span>
             </button>
           </div>
         </header>
@@ -498,6 +501,18 @@ export default function ManagementDashboard({
           </section>
         </div>
       </section>
+      {showCreate ? (
+        <WorkItemCreateDialog
+          creatorName={currentUserName}
+          people={activeUserNames}
+          onClose={closeCreate}
+          onCreated={(item) => {
+            setWorkItems((current) => [item, ...current]);
+            setShowCreate(false);
+            setSelectedItemId(item.id);
+          }}
+        />
+      ) : null}
       <WorkItemDetail
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}

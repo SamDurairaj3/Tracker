@@ -69,8 +69,46 @@
   border: 1px solid #315148;
   border-radius: 50%;
   color: #c8ded6;
+  background: transparent;
+  font-family: inherit;
   font-size: 0.75rem;
   font-weight: 800;
+  padding: 0;
+  cursor: pointer;
+}
+
+.avatar:focus-visible { outline: 3px solid rgb(189 245 218 / 45%); outline-offset: 2px; }
+.profileMenu { position: relative; flex: 0 0 auto; }
+.profilePopover {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  width: min(17rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  border: 1px solid #d7e3dd;
+  border-radius: 0.9rem;
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 1rem 2.5rem rgb(3 24 16 / 28%);
+}
+.profilePopover > span,
+.profilePopover strong,
+.profilePopover small { display: block; }
+.profilePopover strong { font-size: 0.88rem; }
+.profilePopover small { margin-top: 0.2rem; color: var(--muted); font-size: 0.73rem; }
+.profileSignOut {
+  width: 100%;
+  min-height: 2.5rem;
+  margin-top: 0.75rem;
+  border: 1px solid #c7d8d0;
+  border-radius: 0.65rem;
+  color: #285b47;
+  background: #f6faf8;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .offlineBanner {
@@ -1196,7 +1234,7 @@
 .archiveToggle input { accent-color: #256c50; }
 .archivedCard { opacity: 0.72; border: 1px dashed #9aa8a1; border-radius: 14px; background: #edf1ef; overflow: hidden; }
 
-.accountCard {
+.pushSettings {
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr) auto;
   align-items: center;
@@ -1207,7 +1245,7 @@
   border-radius: 0.95rem;
   background: white;
 }
-.accountAvatar {
+.pushSettings > span {
   width: 2.4rem;
   height: 2.4rem;
   display: grid;
@@ -1215,15 +1253,17 @@
   border-radius: 50%;
   color: #174d39;
   background: #d9f0e5;
-  font-size: 0.72rem;
+  font-size: 1rem;
   font-weight: 900;
 }
-.accountCard > span:nth-child(2) { min-width: 0; }
-.accountCard strong,
-.accountCard small { display: block; }
-.accountCard strong { overflow: hidden; font-size: 0.86rem; text-overflow: ellipsis; white-space: nowrap; }
-.accountCard small { margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; }
-.accountSignOut {
+.pushSettings > div { min-width: 0; }
+.pushSettings strong,
+.pushSettings small,
+.pushSettings em { display: block; }
+.pushSettings strong { font-size: 0.86rem; }
+.pushSettings small { margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; line-height: 1.4; }
+.pushSettings em { margin-top: 0.3rem; color: #2c684f; font-size: 0.69rem; font-style: normal; }
+.pushSettings button {
   min-height: 2.35rem;
   padding: 0 0.75rem;
   border: 1px solid #c7d8d0;
@@ -1235,5 +1275,6 @@
   font-weight: 850;
   cursor: pointer;
 }
-.accountSignOut:disabled { cursor: wait; opacity: 0.6; }
+.pushSettings button:disabled,
+.profileSignOut:disabled { cursor: wait; opacity: 0.6; }
 .actionList footer { flex-wrap: wrap; }

@@ -27,6 +27,11 @@ import {
   setWorkItemArchived,
   updateWorkItem,
 } from '../../lib/work-items-client';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushConfiguration,
+} from '../../lib/push-client';
 import styles from './mobile.module.css';
 
 type HomeView = 'home' | 'work' | 'actions' | 'notifications';
@@ -50,6 +55,7 @@ type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
+type PushState = 'checking' | 'unsupported' | 'unavailable' | 'blocked' | 'disabled' | 'enabled' | 'working' | 'error';
 
 const DRAFT_KEY = 'vector-work.mobile.work-card-draft.v1';
 let fallbackIdSequence = 0;
@@ -160,8 +166,13 @@ export default function MobileWorkspace({
   const [updatingActionId, setUpdatingActionId] = useState('');
   const [actionError, setActionError] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [pushState, setPushState] = useState<PushState>('checking');
+  const [pushPublicKey, setPushPublicKey] = useState('');
+  const [pushMessage, setPushMessage] = useState('');
   const now = useLiveNow();
   const draftHydrated = useRef(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const people = useMemo(
     () => [currentUserName, ...activeUserNames.filter((name) => name !== currentUserName)],
     [activeUserNames, currentUserName],
@@ -176,6 +187,11 @@ export default function MobileWorkspace({
         if (!active) return;
         setItems(workItems);
         setLoadError('');
+        const requested = new URLSearchParams(window.location.search).get('workItem');
+        if (requested && workItems.some((item) => item.id === requested)) {
+          setSelectedItemId(requested);
+          window.history.replaceState({}, '', '/mobile');
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -232,9 +248,28 @@ export default function MobileWorkspace({
     window.addEventListener('beforeinstallprompt', handleInstallPrompt);
     window.addEventListener('appinstalled', handleInstalled);
 
-    if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+    async function preparePush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        setPushState('unsupported');
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+        const configuration = await getPushConfiguration();
+        if (!configuration.configured || !configuration.publicKey) {
+          setPushState('unavailable');
+          return;
+        }
+        setPushPublicKey(configuration.publicKey);
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) setPushState('enabled');
+        else if (Notification.permission === 'denied') setPushState('blocked');
+        else setPushState('disabled');
+      } catch {
+        setPushState('error');
+      }
     }
+    void preparePush();
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -243,6 +278,22 @@ export default function MobileWorkspace({
       window.removeEventListener('appinstalled', handleInstalled);
     };
   }, [currentUserName]);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) setProfileOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [profileOpen]);
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.archivedAt),
@@ -495,6 +546,34 @@ export default function MobileWorkspace({
     setInstallPrompt(null);
   }
 
+  async function enablePush() {
+    if (!pushPublicKey) return;
+    try {
+      setPushState('working');
+      setPushMessage('');
+      await enablePushNotifications(pushPublicKey);
+      setPushState('enabled');
+      setPushMessage('Push notifications are enabled on this device.');
+    } catch (error) {
+      if ('Notification' in window && Notification.permission === 'denied') setPushState('blocked');
+      else setPushState('error');
+      setPushMessage(error instanceof Error ? error.message : 'Push notifications could not be enabled.');
+    }
+  }
+
+  async function disablePush() {
+    try {
+      setPushState('working');
+      setPushMessage('');
+      await disablePushNotifications();
+      setPushState('disabled');
+      setPushMessage('Push notifications are disabled on this device.');
+    } catch (error) {
+      setPushState('error');
+      setPushMessage(error instanceof Error ? error.message : 'Push notifications could not be disabled.');
+    }
+  }
+
   if (creating) {
     return (
       <main className={styles.mobileShell}>
@@ -576,7 +655,22 @@ export default function MobileWorkspace({
           <strong>Vector Work</strong>
           <span>Cosmicport · Engineering</span>
         </div>
-        <div className={styles.avatar}>{initials}</div>
+        <div className={styles.profileMenu} ref={profileRef}>
+          <button
+            className={styles.avatar}
+            type="button"
+            aria-label="Open account menu"
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen((open) => !open)}
+          >{initials}</button>
+          {profileOpen ? (
+            <div className={styles.profilePopover} role="menu">
+              <span><strong>{currentUserName}</strong><small>{canManage ? 'Administrator' : 'Engineer'}</small></span>
+              <SignOutButton className={styles.profileSignOut} />
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {!online ? (
@@ -677,11 +771,24 @@ export default function MobileWorkspace({
 
         {view === 'notifications' ? (
           <>
-            <ScreenHeading eyebrow="Live attention" title="Notifications" description="Derived from current work and assignments. Nothing here is a fake unread or push notification." />
-            <section className={styles.accountCard} aria-label="Signed-in account">
-              <span className={styles.accountAvatar} aria-hidden="true">{initials}</span>
-              <span><strong>{currentUserName}</strong><small>{canManage ? 'Administrator' : 'Engineer'}</small></span>
-              <SignOutButton className={styles.accountSignOut} />
+            <ScreenHeading eyebrow="Live attention" title="Notifications" description="Enable background alerts for new cards, checklist assignments, comments, and activity relevant to you." />
+            <section className={styles.pushSettings} aria-label="Push notification settings">
+              <span aria-hidden="true">↗</span>
+              <div>
+                <strong>{pushState === 'enabled' ? 'Push notifications enabled' : 'Background notifications'}</strong>
+                <small>{
+                  pushState === 'unsupported' ? 'This browser does not support Web Push.'
+                    : pushState === 'unavailable' ? 'Web Push is not configured on the server.'
+                      : pushState === 'blocked' ? 'Notifications are blocked in this browser’s site settings.'
+                        : pushState === 'enabled' ? 'This device will receive relevant work updates.'
+                          : 'Get relevant work updates when the app is closed.'
+                }</small>
+                {pushMessage ? <em role="status">{pushMessage}</em> : null}
+              </div>
+              {pushState === 'enabled' ? <button type="button" onClick={() => void disablePush()}>Disable</button>
+                : pushState === 'disabled' || pushState === 'error' ? <button type="button" onClick={() => void enablePush()}>Enable</button>
+                  : pushState === 'working' || pushState === 'checking' ? <button type="button" disabled>Checking…</button>
+                    : null}
             </section>
             <section className={styles.notificationList} aria-label="Current work attention">
               {notifications.map((signal) => (

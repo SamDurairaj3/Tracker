@@ -1,0 +1,39 @@
+.backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: start center; overflow-y: auto; padding: 2rem 1rem; background: rgb(7 23 18 / 68%); backdrop-filter: blur(5px); }
+.dialog { --green: #267052; width: min(780px, 100%); overflow: hidden; border: 1px solid rgb(255 255 255 / 25%); border-radius: 1rem; color: #1b2823; background: #f5f8f6; box-shadow: 0 2rem 5rem rgb(3 18 12 / 36%); }
+.dialog > header { display: flex; justify-content: space-between; gap: 2rem; padding: 1.4rem 1.55rem; border-bottom: 1px solid #dfe6e2; background: white; }
+.dialog > header span { color: var(--green); font-size: .65rem; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.dialog > header h2 { margin: .35rem 0 0; font: 600 1.65rem Georgia, serif; }
+.dialog > header p { margin: .4rem 0 0; color: #73807a; font-size: .76rem; line-height: 1.5; }
+.dialog > header button { width: 2rem; height: 2rem; flex: 0 0 auto; border: 1px solid #dce3df; border-radius: .5rem; color: #5b6963; background: #fafbfa; font-size: 1.2rem; cursor: pointer; }
+.dialog form { display: grid; }
+.dialog form > section { display: grid; gap: .8rem; margin: .9rem 1.1rem 0; padding: 1.1rem; border: 1px solid #e0e6e2; border-radius: .75rem; background: white; }
+.dialog h3 { margin: 0; color: #2a3a33; font-size: .8rem; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.dialog label { display: grid; gap: .35rem; }
+.dialog label > span { color: #53625b; font-size: .7rem; font-weight: 750; }
+.dialog input, .dialog select, .dialog textarea { width: 100%; border: 1px solid #d7dfda; border-radius: .5rem; color: #25362f; background: #fbfcfb; font: inherit; font-size: .76rem; }
+.dialog input, .dialog select { min-height: 2.55rem; padding: 0 .65rem; }
+.dialog textarea { resize: vertical; padding: .65rem; line-height: 1.45; }
+.dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color: #78ad95; outline: 3px solid rgb(59 137 99 / 10%); }
+.checklistHeader { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: #53625b; font-size: .72rem; }
+.checklistHeader button { border: 0; color: var(--green); background: transparent; font-weight: 750; cursor: pointer; }
+.checklist { display: grid; gap: .5rem; }
+.checklist > div { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 10rem 8.5rem 2rem; gap: .45rem; align-items: center; }
+.checklist > div > span { color: #8a9690; font-size: .7rem; text-align: center; }
+.checklist > div > button { height: 2rem; border: 0; color: #9a5a4c; background: transparent; font-size: 1rem; cursor: pointer; }
+.error { margin: .8rem 1.1rem 0; padding: .7rem .8rem; border: 1px solid #eccdc5; border-radius: .55rem; color: #934634; background: #fff4f1; font-size: .72rem; }
+.dialog form > footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: .55rem; margin-top: .9rem; padding: .9rem 1.1rem; border-top: 1px solid #dfe6e2; background: rgb(255 255 255 / 96%); }
+.dialog form > footer button { min-height: 2.5rem; padding: 0 .9rem; border: 1px solid #d5ded9; border-radius: .55rem; color: #596860; background: white; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.dialog form > footer .primary { color: white; border-color: #173e32; background: #173e32; }
+.dialog button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 680px) {
+  .backdrop { padding: 0; }
+  .dialog { min-height: 100dvh; border: 0; border-radius: 0; }
+  .grid { grid-template-columns: 1fr; }
+  .checklist > div { grid-template-columns: 1.5rem minmax(0, 1fr) 2rem; }
+  .checklist select, .checklist input[type='date'] { grid-column: 2 / 3; }
+  .checklist > div > button { grid-column: 3; grid-row: 1 / span 3; }
+  .dialog form > footer { flex-wrap: wrap; }
+  .dialog form > footer button { flex: 1; }
+  .dialog form > footer .primary { flex-basis: 100%; }
+}

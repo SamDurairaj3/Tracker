@@ -7,6 +7,7 @@ marker=/srv/tracker-data/tracker/.tracker-usb-uuid
 data_dir=/srv/tracker-data/tracker/postgres
 database_secret="$script_dir/secrets/postgres_password.txt"
 auth_secret="$script_dir/secrets/better_auth_secret.txt"
+vapid_secret="$script_dir/secrets/vapid_private_key.pem"
 
 [ -d "$data_dir" ] || { echo "Missing $data_dir; run prepare.sh while the USB is mounted" >&2; exit 1; }
 [ -f "$marker" ] && [ "$(cat "$marker")" = "$uuid" ] || {
@@ -15,6 +16,7 @@ auth_secret="$script_dir/secrets/better_auth_secret.txt"
 }
 [ -s "$database_secret" ] || { echo 'Database password file is missing or empty; run prepare.sh' >&2; exit 1; }
 [ -s "$auth_secret" ] || { echo 'Authentication secret file is missing or empty; run prepare.sh' >&2; exit 1; }
+[ -s "$vapid_secret" ] || { echo 'Web Push private key file is missing or empty; run prepare.sh' >&2; exit 1; }
 
 compose() {
   docker compose --project-directory "$script_dir" --env-file "$script_dir/.env" -f "$script_dir/compose.yaml" "$@"

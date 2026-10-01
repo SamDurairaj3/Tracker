@@ -73,20 +73,24 @@ sh ./prepare.sh
 Set `TRACKER_USB_UUID` to the UUID printed by `findmnt`. On later visits, keep
 and verify the existing `.env` rather than replacing it.
 
-`prepare.sh` checks the mount before writing. It creates the PostgreSQL data
-directory and USB marker, then generates these ignored mode-`0600` files only
+Set `VAPID_SUBJECT` to a monitored `mailto:` contact URI before running the
+preparation script. `prepare.sh` checks the mount before writing. It creates
+the PostgreSQL data directory and USB marker, then generates these ignored
+mode-`0600` files only
 when they do not already exist:
 
 - `secrets/postgres_password.txt`
 - `secrets/better_auth_secret.txt`
+- `secrets/vapid_private_key.pem`
 
 The authentication secret is high entropy and is never placed in a normal
 environment variable. Compose mounts it only into `web`. The entrypoint copies
 both mounted secrets into private tmpfs, exports only their `*_FILE` paths, and
 drops to the unprivileged `node` user. PostgreSQL receives only its password.
-Do not replace either file during an update. Replacing the database password
+Do not replace these files during an update. Replacing the database password
 does not rotate PostgreSQL; replacing the auth secret invalidates sessions and
-can make protected auth data unreadable.
+can make protected auth data unreadable. Replacing the Web Push key makes
+existing browser subscriptions unusable until each user enables push again.
 
 ## 4. Build, migrate, and start
 
@@ -101,7 +105,8 @@ the ARM64 image with the normal Docker layer cache, starts PostgreSQL, applies
 the checksummed SQL migrations, and starts the web app. Do not add `--no-cache`
 for a normal update. Migration `0002_better_auth.sql` creates the Better Auth
 user, account, session, verification, admin-role, and database rate-limit
-schema. Runtime requests validate the schema but never mutate it. A healthy
+schema. Migration `0005_push_subscriptions.sql` adds per-user Web Push device
+subscriptions. Runtime requests validate the schema but never mutate it. A healthy
 response is `{"status":"ok"}` and contains no database details.
 
 The first build needs internet access for images and packages and can take
@@ -191,6 +196,13 @@ Authenticated users share the same pilot work-item view, while “my work” and
 assignment filters use the signed-in display name. Login, session, protected
 HTML, and work-item API responses use `no-store` headers.
 
+Administrators can create and assign complete work cards from `/management`.
+On `/mobile`, each user can open Notifications and select **Enable push
+notifications**. Browser permission is requested only after that user action.
+The server sends encrypted alerts for card creation, new checklist assignment,
+comments, and other card activity to the relevant owner and assignees, excluding
+the person who made the change. A notification opens the corresponding card.
+
 ## 7. Optional Cloudflare Quick Tunnel review
 
 This is an opt-in review path, not a production ingress. It uses Cloudflare's
@@ -225,7 +237,11 @@ If Docker requires elevation, add `sudo` to the four script commands. Quick
 Tunnels have random URLs, no SLA, a 200 concurrent-request limit, and no
 Server-Sent Events support. A restart can produce a different URL. They do not
 provide a durable hostname or Cloudflare Access policy. Use this only for a
-short review, share the URL narrowly, and stop it afterward.
+short review, share the URL narrowly, and stop it afterward. Web Push
+subscriptions are tied to the site origin. If a Quick Tunnel restarts with a
+different URL, users must visit the new URL and enable push there; notification
+clicks from the old origin may no longer open the app. A stable domain is
+required before treating push delivery as durable.
 
 ## USB and network fail-closed behavior
 
@@ -275,7 +291,8 @@ archive, restores into a unique temporary database, checks Tracker's required
 tables, counts rows, rejects orphan checklist steps, and always removes the
 temporary database. It never restores over the live database.
 
-Keep secure off-device copies of both secret files with the database backup.
+Keep secure off-device copies of all three secret files with the database
+backup, including `vapid_private_key.pem`.
 Do not use `docker compose down -v` or delete the USB data directory during
 normal updates.
 
@@ -286,9 +303,9 @@ The previous D1 database is untouched. The detailed
 remains open. Export, classify, stage, and compare that data before selecting a
 new authoritative database.
 
-The base Pi deployment and a manual backup/restore recovery were exercised
-previously. The auth migration, user provisioning, login/session test, new
-backup scripts, off-device restore, and opt-in Quick Tunnel preflight still
-need to be run on the Pi. This implementation does not start a tunnel or deploy
-anything. On the development computer, validate Compose and both POSIX scripts,
-then use this section in order on the Pi.
+The base Pi deployment, authentication, Quick Tunnel review, and a manual
+backup/restore recovery were exercised previously. The Web Push migration,
+secret generation, and device opt-in still need to be run on the Pi. This
+implementation does not start a tunnel or deploy anything. On the development
+computer, validate Compose and the POSIX scripts, then use this section in
+order on the Pi.

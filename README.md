@@ -45,9 +45,10 @@ The web application stays at the workspace root. The existing `apps/api` and reu
 1. Install the workspace packages with `pnpm install`.
 2. Copy `.env.example` to `.env.local` if that file does not already exist; otherwise update it. Set `DATABASE_URL` for your database.
 3. Create an ignored `secrets/better_auth_secret.txt` containing one high-entropy line of at least 32 bytes. Keep `BETTER_AUTH_SECRET_FILE` in `.env.local` pointed at that file.
-4. Run `pnpm db:migrate` to create the work-item and authentication tables.
-5. Create the first invited administrator with `pnpm auth:admin -- create --email <address> --name "<name>" --role admin`. The command reads the password privately from stdin.
-6. Run `pnpm dev`, then open `http://localhost:5173` and sign in.
+4. Generate an ignored P-256 key with `openssl ecparam -name prime256v1 -genkey -noout -out secrets/vapid_private_key.pem`, then set `VAPID_PRIVATE_KEY_FILE` and a `VAPID_SUBJECT=mailto:<contact-address>` in `.env.local`.
+5. Run `pnpm db:migrate` to create the work-item, authentication, and push-subscription tables.
+6. Create the first invited administrator with `pnpm auth:admin -- create --email <address> --name "<name>" --role admin`. The command reads the password privately from stdin.
+7. Run `pnpm dev`, then open `http://localhost:5173` and sign in.
 
 New databases start empty. Demo seeding is an explicit, guarded operation; it is never run by startup or migrations. No browser storage is used as the source of truth for work records. Existing D1 data is preserved but has not been imported.
 
@@ -57,7 +58,7 @@ See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) fo
 
 | Route | Audience | Purpose |
 |---|---|---|
-| `/management` | Administrators | Organization-wide work visibility with Kanban and Gantt views |
+| `/management` | Administrators | Create and assign work cards, and review organization-wide Kanban and Gantt views |
 | `/management/users` | Administrators | Create, edit, disable, re-enable, and reset invited accounts |
 | `/engineering` | Invited administrators and engineers | Create owned work, update its workflow, and complete assigned actions |
 | `/mobile` | Invited administrators and engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
@@ -70,7 +71,7 @@ Administrators manage invite-only accounts at `/management/users`. The portal cr
 
 Open `/mobile` on a phone or supported desktop browser after signing in. When the browser offers installation, the install card adds Vector Work as a standalone app that starts on the mobile workspace.
 
-The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately. Cards open a shared full-detail view. Engineers can update owned workflow status and their assigned checklist actions; administrators can update workflow and checklist status. Mobile Notifications is a live attention feed derived from current assignments, health, review state, and due dates, without unread persistence or push-notification claims.
+The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately. Cards open a shared full-detail view. Engineers can update owned workflow status and their assigned checklist actions; administrators can update workflow and checklist status. Mobile Notifications includes a live attention feed and an explicit device-level Web Push control. After a user selects **Enable push notifications** and accepts the browser prompt, the device can receive relevant card, assignment, activity, and comment alerts while the PWA is closed. The actor who caused the event is not alerted, and pushes are limited to the card owner and checklist assignees.
 
 Superseded interface prototypes are preserved under `archive/` with timestamped filenames and explanatory header comments.
 

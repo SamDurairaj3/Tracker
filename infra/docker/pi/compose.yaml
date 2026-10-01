@@ -67,10 +67,13 @@ services:
       DATABASE_PASSWORD_FILE: /run/tracker/postgres_password
       DATABASE_POOL_MAX: "5"
       BETTER_AUTH_SECRET_FILE: /run/tracker/better_auth_secret
+      VAPID_PRIVATE_KEY_FILE: /run/tracker/vapid_private_key.pem
+      VAPID_SUBJECT: ${VAPID_SUBJECT:?Set VAPID_SUBJECT in infra/docker/pi/.env}
       NEXT_PUBLIC_APP_URL: http://localhost:5173
     secrets:
       - postgres_password
       - better_auth_secret
+      - vapid_private_key
     tmpfs:
       - /run/tracker:size=128k,mode=0711
     depends_on:
@@ -93,6 +96,8 @@ secrets:
     file: ./secrets/postgres_password.txt
   better_auth_secret:
     file: ./secrets/better_auth_secret.txt
+  vapid_private_key:
+    file: ./secrets/vapid_private_key.pem
 
 networks:
   database:

@@ -112,6 +112,7 @@ test('work-item API rejects anonymous and unauthorized callers before storage', 
 
 test('work-item creation always uses the authenticated display name', async () => {
   let recorded = '';
+  let notified = '';
   const api = createWorkItemHandlers({
     async listWorkItems() { return []; },
     async getWorkItem() { return null; },
@@ -120,22 +121,26 @@ test('work-item creation always uses the authenticated display name', async () =
       return stubItem(actor?.name ?? '');
     },
     async patchWorkItem() { return null; },
-  }, async () => ({ id: null, name: 'Signed In Engineer', role: 'engineer' }));
+  }, async () => ({ id: null, name: 'Signed In Engineer', role: 'engineer' }), {
+    async created(item) { notified = item.id; },
+    async updated() {},
+  });
   const response = await api.POST(request('POST', { ...input, createdBy: 'Spoofed Name' }));
   assert.equal(response.status, 201);
   assert.equal(recorded, 'Signed In Engineer');
+  assert.equal(notified, 'PROP-001');
   assert.equal((await response.json() as { item: WorkItem }).item.createdBy, 'Signed In Engineer');
 });
 
 test('auth migration is explicit and creates every Better Auth table', async () => {
   const { db, close } = memoryPostgres();
   try {
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql', '0005_push_subscriptions.sql']);
     const { rows } = await db.query<{ name: string | null }>(`
       SELECT to_regclass(name)::text AS name
       FROM unnest(ARRAY[
         'auth_users', 'auth_sessions', 'auth_accounts',
-        'auth_verifications', 'auth_rate_limits'
+        'auth_verifications', 'auth_rate_limits', 'push_subscriptions'
       ]) AS name
     `);
     assert.deepEqual(rows.map((row) => row.name).sort(), [
@@ -144,6 +149,7 @@ test('auth migration is explicit and creates every Better Auth table', async () 
       'auth_sessions',
       'auth_users',
       'auth_verifications',
+      'push_subscriptions',
     ]);
   } finally {
     await close();
@@ -171,8 +177,10 @@ test('provisioning CLI refuses password arguments and validates roles', () => {
 
 test('service worker never caches protected HTML or API responses', () => {
   const source = readFileSync(new URL('../public/service-worker.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /['"]\/mobile['"]/);
+  assert.doesNotMatch(source, /SHELL_ASSETS[\s\S]{0,300}['"]\/mobile['"]/);
   assert.match(source, /request\.mode === 'navigate'/);
   assert.match(source, /url\.pathname\.startsWith\('\/api\/'\)/);
   assert.doesNotMatch(source, /caches\.match\('\/mobile'\)/);
+  assert.match(source, /addEventListener\('push'/);
+  assert.match(source, /addEventListener\('notificationclick'/);
 });

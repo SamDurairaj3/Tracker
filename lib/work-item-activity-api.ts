@@ -1,5 +1,6 @@
 import type { createWorkItemRepository } from '../db/work-items';
-import { canAccessWorkItem } from './work-items';
+import type { WorkItemActor } from '../db/work-items';
+import { canAccessWorkItem, type WorkItem, type WorkItemActivity } from './work-items';
 import type { AuthenticateWorkItemRequest } from './work-items-api';
 import {
   ACCESS_DENIED,
@@ -23,9 +24,15 @@ type LifecycleRepository = Pick<
   'getWorkItem' | 'setWorkItemArchived'
 >;
 
+type ActivityNotifications = {
+  comment(item: WorkItem, activity: WorkItemActivity, actor: WorkItemActor): Promise<void>;
+  activity(item: WorkItem, actor: WorkItemActor): Promise<void>;
+};
+
 export function createWorkItemActivityHandlers(
   repository: ActivityRepository,
   authenticate: AuthenticateWorkItemRequest,
+  notifications?: Pick<ActivityNotifications, 'comment'>,
 ) {
   async function GET(request: Request): Promise<Response> {
     const access = await authorizeWorkItemRequest(request, authenticate);
@@ -86,6 +93,7 @@ export function createWorkItemActivityHandlers(
         typeof payload.checklistStepId === 'string' ? payload.checklistStepId : null,
         access.actor,
       );
+      await notifications?.comment(item, activity, access.actor);
       return Response.json(
         { activity },
         { status: 201, headers: NO_STORE_HEADERS },
@@ -104,6 +112,7 @@ export function createWorkItemActivityHandlers(
 export function createWorkItemLifecycleHandlers(
   repository: LifecycleRepository,
   authenticate: AuthenticateWorkItemRequest,
+  notifications?: Pick<ActivityNotifications, 'activity'>,
 ) {
   async function PATCH(request: Request): Promise<Response> {
     const access = await authorizeWorkItemRequest(request, authenticate);
@@ -134,6 +143,9 @@ export function createWorkItemLifecycleHandlers(
         payload.archived,
         access.actor,
       );
+      if (item.updatedAt !== existing.updatedAt) {
+        await notifications?.activity(item, access.actor);
+      }
       return Response.json({ item }, { headers: NO_STORE_HEADERS });
     } catch (error) {
       const known = mutationErrorResponse(error);

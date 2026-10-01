@@ -8,6 +8,7 @@ data_dir=/srv/tracker-data/tracker/postgres
 secret_dir="$script_dir/secrets"
 database_secret="$secret_dir/postgres_password.txt"
 auth_secret="$secret_dir/better_auth_secret.txt"
+vapid_secret="$secret_dir/vapid_private_key.pem"
 
 # The host check runs before any write under /srv/tracker-data.
 if [ -e "$marker" ] && [ "$(cat "$marker")" != "$uuid" ]; then
@@ -31,8 +32,16 @@ fi
 if [ ! -e "$auth_secret" ]; then
   openssl rand -base64 48 > "$auth_secret"
 fi
+if [ ! -e "$vapid_secret" ]; then
+  openssl ecparam -name prime256v1 -genkey -noout > "$vapid_secret"
+fi
 [ -s "$database_secret" ] || { echo 'Database password file is empty' >&2; exit 1; }
 [ -s "$auth_secret" ] || { echo 'Authentication secret file is empty' >&2; exit 1; }
-chmod 600 "$database_secret" "$auth_secret"
-echo 'USB data directory and local database and authentication secrets are ready.'
+[ -s "$vapid_secret" ] || { echo 'Web Push private key file is empty' >&2; exit 1; }
+openssl pkey -in "$vapid_secret" -check -noout >/dev/null 2>&1 || {
+  echo 'Web Push private key is invalid' >&2
+  exit 1
+}
+chmod 600 "$database_secret" "$auth_secret" "$vapid_secret"
+echo 'USB data directory and local database, authentication, and Web Push secrets are ready.'
 echo 'Existing database files and existing secrets were preserved.'

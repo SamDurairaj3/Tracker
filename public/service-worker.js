@@ -1,5 +1,5 @@
 /* Vector Work static assets. Protected HTML and every API response are network-only. */
-const SHELL_CACHE = 'vector-work-static-v2';
+const SHELL_CACHE = 'vector-work-static-v3';
 const SHELL_ASSETS = [
   '/manifest.webmanifest',
   '/icons/vector-work-192.png',
@@ -60,4 +60,40 @@ self.addEventListener('fetch', (event) => {
       ),
     );
   }
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'Vector Work',
+    body: 'New work activity is available.',
+    tag: 'vector-work-activity',
+    url: '/mobile',
+  };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // Keep the privacy-safe fallback when a malformed payload arrives.
+  }
+  event.waitUntil(self.registration.showNotification(payload.title, {
+    body: payload.body,
+    tag: payload.tag,
+    icon: '/icons/vector-work-192.png',
+    badge: '/icons/vector-work-192.png',
+    data: { url: payload.url },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '/mobile', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+      if (existing) {
+        if ('navigate' in existing) await existing.navigate(target);
+        return existing.focus();
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
 });

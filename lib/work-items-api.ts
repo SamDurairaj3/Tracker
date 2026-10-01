@@ -1,5 +1,6 @@
 import type {
   CreateWorkItemInput,
+  WorkItem,
   WorkItemEditInput,
   WorkItemPatch,
 } from './work-items';
@@ -25,6 +26,11 @@ type WorkItemApiRepository = Pick<
 export type AuthenticateWorkItemRequest = (
   request: Request,
 ) => Promise<WorkItemActor | null>;
+
+export type WorkItemMutationNotifications = {
+  created(item: WorkItem, actor: WorkItemActor): Promise<void>;
+  updated(before: WorkItem, after: WorkItem, actor: WorkItemActor): Promise<void>;
+};
 
 export const AUTHENTICATION_REQUIRED = 'Authentication required.';
 export const ACCESS_DENIED = 'Access denied.';
@@ -352,6 +358,7 @@ export function validateWorkItemPatch(value: unknown) {
 export function createWorkItemHandlers(
   repository: WorkItemApiRepository,
   authenticate: AuthenticateWorkItemRequest,
+  notifications?: WorkItemMutationNotifications,
 ) {
   async function GET(request: Request): Promise<Response> {
     const access = await authorizeWorkItemRequest(request, authenticate);
@@ -385,6 +392,7 @@ export function createWorkItemHandlers(
 
     try {
       const item = await repository.insertWorkItem(parsed.input, access.actor);
+      await notifications?.created(item, access.actor);
       return Response.json({ item }, { status: 201, headers: NO_STORE_HEADERS });
     } catch (error) {
       const known = mutationErrorResponse(error);
@@ -430,6 +438,9 @@ export function createWorkItemHandlers(
 
       const item = await repository.patchWorkItem(parsed.patch, access.actor);
       if (!item) return jsonError('Work item not found.', 404);
+      if (item.updatedAt !== existing.updatedAt) {
+        await notifications?.updated(existing, item, access.actor);
+      }
       return Response.json({ item }, { headers: NO_STORE_HEADERS });
     } catch (error) {
       const known = mutationErrorResponse(error);
@@ -462,6 +473,9 @@ export function createWorkItemHandlers(
         return jsonError('The work item could not be edited.', 500);
       }
       const item = await repository.editWorkItem(parsed.input, access.actor);
+      if (item.updatedAt !== existing.updatedAt) {
+        await notifications?.updated(existing, item, access.actor);
+      }
       return Response.json({ item }, { headers: NO_STORE_HEADERS });
     } catch (error) {
       const known = mutationErrorResponse(error);
