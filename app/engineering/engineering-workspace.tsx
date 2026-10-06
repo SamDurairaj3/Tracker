@@ -12,7 +12,6 @@ import {
 import {
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
-  TEAMS,
   canAccessWorkItem,
   type ChecklistStatus,
   type CreateWorkItemInput,
@@ -53,12 +52,12 @@ type WorkItemForm = {
   checklist: ChecklistDraft[];
 };
 
-function createEmptyForm(currentUserName: string, now = new Date()): WorkItemForm {
+function createEmptyForm(currentUserName: string, defaultTeam: string, now = new Date()): WorkItemForm {
   const dates = defaultWorkDates(now);
   return {
     title: '',
     type: 'Task',
-    team: 'Propulsion',
+    team: defaultTeam,
     owner: currentUserName,
     priority: 'High',
     purpose: '',
@@ -102,17 +101,19 @@ function dueTone(item: WorkItem, today: string) {
 export default function EngineeringWorkspace({
   currentUserName,
   activeUserNames,
+  teamNames,
   canManage,
 }: {
   currentUserName: string;
   activeUserNames: string[];
+  teamNames: string[];
   canManage: boolean;
 }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState<WorkItemForm>(() => createEmptyForm(currentUserName));
+  const [form, setForm] = useState<WorkItemForm>(() => createEmptyForm(currentUserName, teamNames[0] ?? ''));
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
@@ -195,7 +196,7 @@ export default function EngineeringWorkspace({
   const reviewCount = activeOwnedWork.filter((item) => item.status === 'review').length;
 
   function openCreateDialog() {
-    setForm(createEmptyForm(currentUserName, new Date()));
+    setForm(createEmptyForm(currentUserName, teamNames[0] ?? '', new Date()));
     setFormError('');
     setNotice('');
     setShowCreate(true);
@@ -457,11 +458,11 @@ export default function EngineeringWorkspace({
                         onKeyDown={(event) => openFromKeyboard(event, item.id)}
                       >
                         <div className={styles.workMeta}>
-                        <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
+                        <span>{item.id}{item.archivedAt ? ' · Archived' : ''}{item.needsAttention ? ' · Needs attention' : ''}</span>
                         <span className={`${styles.status} ${styles[item.status]}`}>
                           <i aria-hidden="true" /> {STATUS_LABELS[item.status]}
                         </span>
-                        <span className={`${styles.due} ${item.health !== 'on-track' ? styles.attention : ''}`}>
+                        <span className={`${styles.due} ${item.health !== 'on-track' || item.needsAttention ? styles.attention : ''}`}>
                           {dueTone(item, today)}
                         </span>
                       </div>
@@ -609,7 +610,7 @@ export default function EngineeringWorkspace({
                   <label>
                     <span>Team</span>
                     <select value={form.team} onChange={(event) => setForm((current) => ({ ...current, team: event.target.value }))}>
-                      {TEAMS.map((team) => <option key={team}>{team}</option>)}
+                      {teamNames.map((team) => <option key={team}>{team}</option>)}
                     </select>
                   </label>
                   <label>
@@ -679,6 +680,7 @@ export default function EngineeringWorkspace({
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
         people={people}
+        teams={teamNames}
         onClose={closeDetail}
         onUpdate={saveDetailUpdate}
         onEdit={saveDetailEdit}

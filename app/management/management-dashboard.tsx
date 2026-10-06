@@ -4,17 +4,21 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorkItemDetail from '../components/work-item-detail';
 import WorkItemCreateDialog from '../components/work-item-create-dialog';
+import PushNotificationControl from '../components/push-notification-control';
 import SignOutButton from '../components/sign-out-button';
+import { formatDateTime } from '../../lib/local-time';
 import { buildTimeline, timelinePosition } from '../../lib/work-schedule';
 import { useLiveNow } from '../../lib/use-live-now';
 import {
   deleteWorkItem,
   editWorkItem,
+  fetchManagementNotifications,
   fetchWorkItems,
   setWorkItemArchived,
   updateWorkItem,
 } from '../../lib/work-items-client';
 import type { WorkHealth, WorkItem, WorkItemEditInput, WorkItemPatch, WorkStatus } from '../../lib/work-items';
+import type { ManagementNotification } from '../../lib/management-notifications';
 import styles from './management.module.css';
 
 type ViewMode = 'kanban' | 'gantt';
@@ -33,12 +37,19 @@ const healthLabels: Record<WorkHealth, string> = {
   blocked: 'Blocked',
 };
 
+const notificationLabels: Record<ManagementNotification['type'], string> = {
+  comment: 'Comment', created: 'Created', edited: 'Edited', workflow: 'Workflow',
+  checklist: 'Checklist', archived: 'Archived', restored: 'Restored',
+};
+
 export default function ManagementDashboard({
   currentUserName,
   activeUserNames,
+  teamNames,
 }: {
   currentUserName: string;
   activeUserNames: string[];
+  teamNames: string[];
 }) {
   const [view, setView] = useState<ViewMode>('kanban');
   const [query, setQuery] = useState('');
@@ -49,6 +60,8 @@ export default function ManagementDashboard({
   const [loadError, setLoadError] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [notifications, setNotifications] = useState<ManagementNotification[]>([]);
+  const [notificationError, setNotificationError] = useState('');
   const now = useLiveNow();
 
   const refreshWorkItems = useCallback(async () => {
@@ -62,6 +75,15 @@ export default function ManagementDashboard({
     }
   }, [showArchived]);
 
+  const refreshNotifications = useCallback(async () => {
+    try {
+      setNotifications(await fetchManagementNotifications(20));
+      setNotificationError('');
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Notifications could not be loaded.');
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     void fetchWorkItems(showArchived)
@@ -69,6 +91,13 @@ export default function ManagementDashboard({
         if (!active) return;
         setWorkItems(items);
         setLoadError('');
+        const requested = new URLSearchParams(window.location.search).get('workItem');
+        if (requested && items.some((item) => item.id === requested)) {
+          setSelectedItemId(requested);
+          window.history.replaceState({}, '', '/management');
+        } else if (requested && !showArchived) {
+          setShowArchived(true);
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -76,17 +105,29 @@ export default function ManagementDashboard({
           error instanceof Error ? error.message : 'Work items could not be loaded.',
         );
       });
-    const refresh = () => void refreshWorkItems();
+    const refresh = () => {
+      void refreshWorkItems();
+      void refreshNotifications();
+    };
     window.addEventListener('focus', refresh);
     return () => {
       active = false;
       window.removeEventListener('focus', refresh);
     };
-  }, [refreshWorkItems, showArchived]);
+  }, [refreshNotifications, refreshWorkItems, showArchived]);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void refreshNotifications(), 0);
+    const timer = window.setInterval(() => void refreshNotifications(), 30_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, [refreshNotifications]);
 
   const teams = useMemo(
-    () => ['All teams', ...Array.from(new Set(workItems.map((item) => item.team)))],
-    [workItems],
+    () => ['All teams', ...Array.from(new Set([...teamNames, ...workItems.map((item) => item.team)]))],
+    [teamNames, workItems],
   );
 
   const filteredItems = useMemo(() => {
@@ -94,7 +135,7 @@ export default function ManagementDashboard({
 
     return workItems.filter((item) => {
       const matchesTeam = team === 'All teams' || item.team === team;
-      const matchesAttention = !attentionOnly || item.health !== 'on-track';
+      const matchesAttention = !attentionOnly || item.needsAttention || item.health !== 'on-track';
       const matchesQuery =
         !normalizedQuery ||
         [item.id, item.title, item.owner, item.team].some((value) =>
@@ -110,6 +151,7 @@ export default function ManagementDashboard({
   const blockedCount = currentItems.filter((item) => item.health === 'blocked').length;
   const reviewCount = currentItems.filter((item) => item.status === 'review').length;
   const atRiskCount = currentItems.filter((item) => item.health === 'at-risk').length;
+  const attentionCount = currentItems.filter((item) => item.needsAttention || item.health !== 'on-track').length;
   const selectedItem = workItems.find((item) => item.id === selectedItemId) ?? null;
   const timeline = useMemo(
     () => now ? buildTimeline(filteredItems, now) : null,
@@ -175,11 +217,17 @@ export default function ManagementDashboard({
           </a>
           <a href="#attention">
             <span aria-hidden="true">△</span> Attention
-            <b>{blockedCount + atRiskCount}</b>
+            <b>{attentionCount}</b>
           </a>
-          <a href="#teams">
+          <a href="#notifications">
+            <span aria-hidden="true">◉</span> Notifications
+          </a>
+          <Link href="/management/users">
             <span aria-hidden="true">◎</span> Teams
-          </a>
+          </Link>
+          <Link href="/management/settings">
+            <span aria-hidden="true">⚙</span> Dropdown settings
+          </Link>
 
           <span className={styles.navLabel}>Views</span>
           <a href="#board">
@@ -248,14 +296,39 @@ export default function ManagementDashboard({
             </article>
             <article className={styles.metricWarning}>
               <span>Schedule attention</span>
-              <strong>{blockedCount + atRiskCount}</strong>
-              <small>{blockedCount} blocked · {atRiskCount} at risk</small>
+              <strong>{attentionCount}</strong>
+              <small>{blockedCount} blocked · {atRiskCount} at risk · manually flagged included</small>
             </article>
             <article>
               <span>Awaiting review</span>
               <strong>{reviewCount}</strong>
               <small>Needs technical closure</small>
             </article>
+          </section>
+
+          <section className={styles.notificationsPanel} id="notifications" aria-labelledby="management-notifications-title">
+            <header>
+              <div><span className={styles.eyebrow}>Organization activity</span><h3 id="management-notifications-title">Management notifications</h3><p>Recent card activity and discussion across every team.</p></div>
+              <PushNotificationControl />
+            </header>
+            {notificationError ? <p className={styles.notificationState} role="alert">{notificationError}</p> : null}
+            {!notificationError && notifications.length === 0 ? <p className={styles.notificationState}>No activity has been recorded yet.</p> : null}
+            {notifications.length ? (
+              <ol className={styles.notificationFeed}>
+                {notifications.slice(0, 10).map((notification) => (
+                  <li key={notification.id}>
+                    <button type="button" onClick={() => {
+                      if (!workItems.some((item) => item.id === notification.workItemId)) setShowArchived(true);
+                      setSelectedItemId(notification.workItemId);
+                    }}>
+                      <span className={styles.notificationAvatar}>{notification.authorName.slice(0, 1).toUpperCase()}</span>
+                      <span><strong>{notification.workItemId} · {notification.workItemTitle}</strong><small>{notification.authorName} · {notificationLabels[notification.type]} · {formatDateTime(notification.createdAt)}</small><em>{notification.body}</em></span>
+                      <b aria-hidden="true">→</b>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
           </section>
 
           <section className={styles.boardPanel} id="all-work" aria-labelledby="all-work-title">
@@ -350,7 +423,7 @@ export default function ManagementDashboard({
                       <div className={styles.cardList}>
                         {columnItems.map((item) => (
                           <article
-                            className={item.archivedAt ? styles.archivedCard : styles.workCard}
+                            className={`${item.archivedAt ? styles.archivedCard : styles.workCard} ${item.needsAttention ? styles.needsAttentionCard : ''}`}
                             key={item.id}
                             role="button"
                             tabIndex={0}
@@ -359,7 +432,7 @@ export default function ManagementDashboard({
                             onKeyDown={(event) => openFromKeyboard(event, item.id)}
                           >
                             <div className={styles.cardTopline}>
-                              <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
+                              <span className={item.needsAttention ? styles.attentionText : undefined}>{item.id}{item.archivedAt ? ' · Archived' : ''}{item.needsAttention ? ' · Needs attention' : ''}</span>
                               <span className={`${styles.health} ${styles[item.health]}`}>
                                 <i aria-hidden="true" /> {healthLabels[item.health]}
                               </span>
@@ -451,7 +524,7 @@ export default function ManagementDashboard({
                               >
                                 <div className={styles.ganttWork}>
                                   <div>
-                                    <span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span>
+                                    <span className={item.needsAttention ? styles.attentionText : undefined}>{item.id}{item.archivedAt ? ' · Archived' : ''}{item.needsAttention ? ' · Needs attention' : ''}</span>
                                     <h4>{item.title}</h4>
                                   </div>
                                   <p>
@@ -505,6 +578,7 @@ export default function ManagementDashboard({
         <WorkItemCreateDialog
           creatorName={currentUserName}
           people={activeUserNames}
+          teams={teamNames}
           onClose={closeCreate}
           onCreated={(item) => {
             setWorkItems((current) => [item, ...current]);
@@ -517,6 +591,7 @@ export default function ManagementDashboard({
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
         people={activeUserNames}
+        teams={teamNames}
         onClose={closeDetail}
         onUpdate={saveUpdate}
         onEdit={saveEdit}

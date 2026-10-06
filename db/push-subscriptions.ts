@@ -72,6 +72,19 @@ export function createPushSubscriptionRepository(db: Database) {
       `, [names]);
       return rows.map(hydrate);
     },
+
+    async listForRole(role: string) {
+      const { rows } = await db.query<PushSubscriptionRow>(`
+        SELECT subscription.id, subscription.endpoint,
+               subscription.p256dh, subscription.auth_secret
+          FROM push_subscriptions subscription
+          JOIN auth_users user_account ON user_account.id = subscription.user_id
+         WHERE user_account.role = $1
+           AND COALESCE(user_account.banned, false) = false
+         ORDER BY subscription.created_at ASC
+      `, [role]);
+      return rows.map(hydrate);
+    },
   };
 }
 
@@ -84,4 +97,6 @@ export const pushSubscriptions = {
     createPushSubscriptionRepository(database()).removeById(id),
   listForNames: (names: string[]) =>
     createPushSubscriptionRepository(database()).listForNames(names),
+  listForRole: (role: string) =>
+    createPushSubscriptionRepository(database()).listForRole(role),
 };

@@ -71,6 +71,7 @@ export type WorkItem = {
   linkedGoal: string | null;
   progressMethod: ProgressMethod;
   blocker: string | null;
+  needsAttention: boolean;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -142,6 +143,7 @@ export type WorkItemPatch = {
   health?: WorkHealth;
   progress?: number;
   blocker?: string | null;
+  needsAttention?: boolean;
   checklistStep?: {
     id: string;
     status: ChecklistStatus;
@@ -172,15 +174,6 @@ export type WorkItemEditInput = {
   progress?: number;
   checklist: WorkItemEditChecklistInput[];
 };
-
-export const TEAMS = [
-  'Propulsion',
-  'Ground Systems',
-  'Avionics',
-  'Structures',
-  'GNC',
-  'Flight Software',
-] as const;
 
 export const STATUS_LABELS: Record<WorkStatus, string> = {
   captured: 'Captured',

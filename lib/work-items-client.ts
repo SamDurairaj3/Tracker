@@ -5,12 +5,14 @@ import type {
   WorkItemEditInput,
   WorkItemPatch,
 } from './work-items';
+import type { ManagementNotification } from './management-notifications';
 
 type ListResponse = { items: WorkItem[]; error?: string };
 type ItemResponse = { item: WorkItem; error?: string };
 type ActivityResponse = { activity: WorkItemActivity[]; error?: string };
 type ActivityItemResponse = { activity: WorkItemActivity; error?: string };
 type DeleteResponse = { deleted: { id: string }; error?: string };
+type ManagementNotificationsResponse = { notifications: ManagementNotification[]; error?: string };
 
 async function parseResponse<T extends { error?: string }>(response: Response) {
   let body: T;
@@ -93,4 +95,12 @@ export async function addWorkItemComment(
     body: JSON.stringify({ id, body, checklistStepId: checklistStepId || null }),
   });
   return (await parseResponse<ActivityItemResponse>(response)).activity;
+}
+
+export async function fetchManagementNotifications(limit = 20) {
+  const response = await fetch(
+    `/api/admin/notifications?limit=${encodeURIComponent(limit)}`,
+    { cache: 'no-store' },
+  );
+  return (await parseResponse<ManagementNotificationsResponse>(response)).notifications;
 }

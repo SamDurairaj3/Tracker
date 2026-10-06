@@ -8,6 +8,7 @@ type SeedWorkItem = Omit<
   | 'linked_goal'
   | 'progress_method'
   | 'blocker'
+  | 'needs_attention'
   | 'created_at'
   | 'updated_at'
   | 'archived_at'

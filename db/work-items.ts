@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { database } from './postgres';
 import type { Database, Queryable } from './database';
 import type { ChecklistRow, WorkItemActivityRow, WorkItemRow } from './rows';
+import { resolveActiveTeamName, TeamSettingsError } from './team-settings';
 import {
   canAccessWorkItem,
   formatDueLabel,
@@ -61,6 +62,7 @@ function hydrateItems(itemRows: WorkItemRow[], checklistRows: ChecklistRow[]): W
     linkedGoal: row.linked_goal,
     progressMethod: row.progress_method,
     blocker: row.blocker,
+    needsAttention: row.needs_attention,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     archivedAt: row.archived_at,
@@ -152,6 +154,17 @@ function assertEditable(item: WorkItem) {
   }
 }
 
+async function activeTeamName(client: Queryable, value: string) {
+  try {
+    return await resolveActiveTeamName(client, value);
+  } catch (error) {
+    if (error instanceof TeamSettingsError) {
+      throw new WorkItemMutationError('invalid', error.message);
+    }
+    throw error;
+  }
+}
+
 async function appendActivity(
   client: Queryable,
   itemId: string,
@@ -192,6 +205,9 @@ function describeCardChanges(existing: WorkItem, patch: WorkItemPatch) {
   }
   if (patch.blocker !== undefined && patch.blocker !== existing.blocker) {
     changes.push(patch.blocker ? 'the blocker note' : 'cleared the blocker note');
+  }
+  if (patch.needsAttention !== undefined && patch.needsAttention !== existing.needsAttention) {
+    changes.push(patch.needsAttention ? 'marked the card as needing attention' : 'cleared the attention flag');
   }
   return changes;
 }
@@ -258,18 +274,20 @@ export function createWorkItemRepository(db: Database) {
           name: input.createdBy,
           role: 'admin',
         };
-        const id = await nextWorkItemId(client, input.team);
+        const team = await activeTeamName(client, input.team);
+        const id = await nextWorkItemId(client, team);
         const timestamp = new Date().toISOString();
         await client.query(`
           INSERT INTO work_items (
             id, title, team, owner, status, health, priority, progress,
             start_date, due_date, due_label, created_by, work_type, purpose,
-            expected_result, linked_goal, progress_method, blocker, created_at, updated_at
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+            expected_result, linked_goal, progress_method, blocker, needs_attention,
+            created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
         `, [
           id,
           input.title.trim(),
-          input.team,
+          team,
           input.owner,
           input.status,
           'on-track',
@@ -285,6 +303,7 @@ export function createWorkItemRepository(db: Database) {
           input.linkedGoal?.trim() || null,
           input.progressMethod,
           null,
+          false,
           timestamp,
           timestamp,
         ]);
@@ -318,7 +337,8 @@ export function createWorkItemRepository(db: Database) {
         const changesCard = patch.status !== undefined
           || patch.health !== undefined
           || patch.progress !== undefined
-          || patch.blocker !== undefined;
+          || patch.blocker !== undefined
+          || patch.needsAttention !== undefined;
         if (changesCard && mutationActor.role !== 'admin' && existing.owner !== mutationActor.name) {
           throw new WorkItemMutationError('forbidden', 'Access denied.');
         }
@@ -355,13 +375,15 @@ export function createWorkItemRepository(db: Database) {
 
         await client.query(`
           UPDATE work_items
-             SET status = $1, health = $2, progress = $3, blocker = $4, updated_at = $5
-           WHERE id = $6
+             SET status = $1, health = $2, progress = $3, blocker = $4,
+                 needs_attention = $5, updated_at = $6
+           WHERE id = $7
         `, [
           patch.status ?? existing.status,
           patch.health ?? existing.health,
           Math.max(0, Math.min(100, Math.round(progress))),
           patch.blocker === undefined ? existing.blocker : patch.blocker?.trim() || null,
+          patch.needsAttention ?? existing.needsAttention,
           new Date().toISOString(),
           patch.id,
         ]);
@@ -393,6 +415,9 @@ export function createWorkItemRepository(db: Database) {
         if (!canManageItem(existing, actor)) {
           throw new WorkItemMutationError('forbidden', 'Access denied.');
         }
+        const team = input.team === existing.team
+          ? existing.team
+          : await activeTeamName(client, input.team);
 
         const existingIds = new Set(existing.checklist.map((step) => step.id));
         const suppliedIds = input.checklist.flatMap((step) => step.id ? [step.id] : []);
@@ -414,7 +439,8 @@ export function createWorkItemRepository(db: Database) {
             current,
           };
         });
-        const fieldChanges = editFieldChanges(existing, input);
+        const normalizedInput = { ...input, team };
+        const fieldChanges = editFieldChanges(existing, normalizedInput);
         const cardDueChanged = existing.due !== input.due;
         const checklistDetailsChanged = input.checklist.length !== existing.checklist.length
           || preparedChecklist.some((step) => (
@@ -493,7 +519,7 @@ export function createWorkItemRepository(db: Database) {
         `, [
           input.title.trim(),
           input.type,
-          input.team,
+          team,
           input.owner,
           input.priority,
           input.purpose.trim(),

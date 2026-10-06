@@ -58,8 +58,9 @@ See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) fo
 
 | Route | Audience | Purpose |
 |---|---|---|
-| `/management` | Administrators | Create and assign work cards, and review organization-wide Kanban and Gantt views |
+| `/management` | Administrators | Create and assign work cards; review notifications, attention flags, Kanban, and Gantt views |
 | `/management/users` | Administrators | Create, edit, disable, re-enable, and reset invited accounts |
+| `/management/settings` | Administrators | Add, rename, disable, and remove work-card dropdown options such as engineering teams |
 | `/engineering` | Invited administrators and engineers | Create owned work, update its workflow, and complete assigned actions |
 | `/mobile` | Invited administrators and engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
 
@@ -67,11 +68,13 @@ Unauthenticated requests go to `/login`. After sign-in, the root route sends adm
 
 Administrators manage invite-only accounts at `/management/users`. The portal creates credential accounts, edits names, emails, and roles, resets passwords, and disables or re-enables access without deleting attribution history. Renames update exact owner, creator, and checklist-assignee references in one transaction. Session-revoking changes require the affected administrator to sign in again. The local `auth:admin` CLI remains the recovery path when no administrator can use the portal.
 
+The management dashboard includes a global recent-activity notification feed. Every active administrator with browser notifications enabled receives card, checklist, activity, and comment pushes, in addition to the directly responsible owner and assignees. Card owners and administrators can explicitly flag or clear **Needs attention**; the flag is recorded in activity and included in management filters and counts. The Teams navigation opens user management, while Dropdown settings opens the controlled-list editor. Team renames update existing cards atomically; teams still referenced by cards can be disabled but not deleted.
+
 ### Mobile PWA
 
 Open `/mobile` on a phone or supported desktop browser after signing in. When the browser offers installation, the install card adds Vector Work as a standalone app that starts on the mobile workspace.
 
-The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately. Cards open a shared full-detail view. Engineers can update owned workflow status and their assigned checklist actions; administrators can update workflow and checklist status. Mobile Notifications includes a live attention feed and an explicit device-level Web Push control. After a user selects **Enable push notifications** and accepts the browser prompt, the device can receive relevant card, assignment, activity, and comment alerts while the PWA is closed. The actor who caused the event is not alerted, and pushes are limited to the card owner and checklist assignees.
+The service worker caches static Next.js assets, icons, and the manifest only. It never caches protected HTML or API responses. An unfinished work-card form is saved locally on the device, but creating the actual work item requires an active authenticated connection; once created, it uses the shared API and appears in management immediately. Cards open a shared full-detail view. Engineers can update owned workflow status and their assigned checklist actions; administrators can update workflow and checklist status. Mobile Notifications includes a live attention feed and an explicit device-level Web Push control. After a user selects **Enable push notifications** and accepts the browser prompt, the device can receive relevant card, assignment, activity, and comment alerts while the PWA is closed. Responsible owners and assignees do not receive a redundant alert for their own action; active administrators receive every alert for oversight.
 
 Superseded interface prototypes are preserved under `archive/` with timestamped filenames and explanatory header comments.
 

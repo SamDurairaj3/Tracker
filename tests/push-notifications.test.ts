@@ -23,6 +23,7 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     start: '2026-10-01', due: '2026-10-05', dueLabel: '5 Oct', createdBy: 'Admin User',
     type: 'Task', purpose: 'Evidence', expectedResult: 'Reviewed evidence', linkedGoal: null,
     progressMethod: 'checklist-count', blocker: null, createdAt: '2026-10-01T00:00:00.000Z',
+    needsAttention: false,
     updatedAt: '2026-10-01T00:00:00.000Z', archivedAt: null, archivedByName: null,
     activityCount: 1, latestActivityAt: '2026-10-01T00:00:00.000Z',
     checklist: [{
@@ -121,6 +122,19 @@ test('push subscriptions stay attached to active authenticated users', async () 
       userAgent: 'Test browser',
     });
     assert.equal((await repository.listForNames(['Owner Engineer'])).length, 1);
+    const adminId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await db.query(`
+      INSERT INTO auth_users (id, name, email, email_verified, created_at, updated_at, role, banned)
+      VALUES ($1, 'Admin User', 'admin@example.test', true, now(), now(), 'admin', false)
+    `, [adminId]);
+    await repository.upsert(adminId, {
+      endpoint: 'https://push.example.test/subscription/admin',
+      p256dh: Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 3)]).toString('base64url'),
+      authSecret: Buffer.alloc(16, 4).toString('base64url'),
+      expirationTime: null,
+      userAgent: 'Admin browser',
+    });
+    assert.equal((await repository.listForRole('admin')).length, 1);
     await db.query('UPDATE auth_users SET banned = true WHERE id = $1', [userId]);
     assert.equal((await repository.listForNames(['Owner Engineer'])).length, 0);
   } finally {

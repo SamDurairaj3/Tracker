@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { listActiveUserNames } from '../../db/auth-users';
+import { listActiveTeamNames } from '../../db/team-settings';
 import { requireIdentity } from '../../lib/auth-session';
 import EngineeringWorkspace from './engineering-workspace';
 
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
 
 export default async function EngineeringPage() {
   const identity = await requireIdentity('/engineering');
-  const activeUserNames = await listActiveUserNames();
-  return <EngineeringWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} />;
+  const [activeUserNames, teamNames] = await Promise.all([
+    listActiveUserNames(),
+    listActiveTeamNames(),
+  ]);
+  return <EngineeringWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} teamNames={teamNames} canManage={identity.role === 'admin'} />;
 }

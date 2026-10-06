@@ -38,6 +38,7 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
     linkedGoal: null,
     progressMethod: 'checklist-count',
     blocker: null,
+    needsAttention: false,
     createdAt: '2026-02-01T08:00:00.000Z',
     updatedAt: '2026-02-01T08:00:00.000Z',
     archivedAt: null,
@@ -105,6 +106,12 @@ test('PATCH runtime validation rejects invalid workflow and checklist states', (
   }), { error: 'A valid checklist action and status are required.' });
   assert.deepEqual(validateWorkItemPatch({ id: 'PROP-001' }), {
     error: 'No supported work-item changes were supplied.',
+  });
+  assert.deepEqual(validateWorkItemPatch({ id: 'PROP-001', needsAttention: 'yes' }), {
+    error: 'Attention state must be true or false.',
+  });
+  assert.deepEqual(validateWorkItemPatch({ id: 'PROP-001', needsAttention: true }), {
+    patch: { id: 'PROP-001', needsAttention: true },
   });
   assert.deepEqual(validateWorkItemPatch({
     id: 'PROP-001',

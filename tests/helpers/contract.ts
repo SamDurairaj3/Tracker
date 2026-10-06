@@ -76,6 +76,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
         start: '2026-09-17', due: '2026-09-21', dueLabel: '21 Sept', createdBy: 'Meera Shah',
         type: 'Task', purpose: 'Test evidence', expectedResult: 'Reviewed result',
         linkedGoal: 'Flight readiness', progressMethod: 'checklist-count', blocker: null,
+        needsAttention: false,
         createdAt: item.createdAt, updatedAt: item.createdAt,
         archivedAt: null, archivedByName: null,
         activityCount: 1, latestActivityAt: item.latestActivityAt,
@@ -190,6 +191,7 @@ export function databaseContract(name: string, setup: () => Promise<{ db: Databa
       await db.query("UPDATE work_items SET id = 'PROP-1000' WHERE id = $1", [first.id]);
       assert.equal((await repository.insertWorkItem(input)).id, 'PROP-1001');
       assert.equal((await repository.insertWorkItem({ ...input, team: 'Avionics' })).id, 'AVN-001');
+      await db.query("INSERT INTO work_item_teams (name, position) VALUES ('Other', 100)");
       assert.equal((await repository.insertWorkItem({ ...input, team: 'Other' })).id, 'WORK-001');
     });
 

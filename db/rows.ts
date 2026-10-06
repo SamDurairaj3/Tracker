@@ -18,6 +18,7 @@ export type WorkItemRow = {
   linked_goal: string | null;
   progress_method: ProgressMethod;
   blocker: string | null;
+  needs_attention: boolean;
   created_at: string;
   updated_at: string;
   archived_at: string | null;

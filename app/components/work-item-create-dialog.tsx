@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { defaultWorkDates } from '../../lib/local-time';
 import {
   PROGRESS_METHOD_LABELS,
-  TEAMS,
   type CreateWorkItemInput,
   type ProgressMethod,
   type WorkItem,
@@ -20,11 +19,11 @@ type FormState = Omit<CreateWorkItemInput, 'status' | 'createdBy' | 'checklist'>
   checklist: ChecklistDraft[];
 };
 
-function emptyForm(defaultOwner: string): FormState {
+function emptyForm(defaultOwner: string, defaultTeam: string): FormState {
   return {
     title: '',
     type: 'Task',
-    team: 'Propulsion',
+    team: defaultTeam,
     owner: defaultOwner,
     priority: 'High',
     purpose: '',
@@ -39,16 +38,18 @@ function emptyForm(defaultOwner: string): FormState {
 export default function WorkItemCreateDialog({
   creatorName,
   people,
+  teams,
   onClose,
   onCreated,
 }: {
   creatorName: string;
   people: string[];
+  teams: string[];
   onClose(): void;
   onCreated(item: WorkItem): void;
 }) {
   const defaultOwner = people.find((name) => name !== creatorName) ?? creatorName;
-  const [form, setForm] = useState<FormState>(() => emptyForm(defaultOwner));
+  const [form, setForm] = useState<FormState>(() => emptyForm(defaultOwner, teams[0] ?? ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -121,7 +122,7 @@ export default function WorkItemCreateDialog({
           <section>
             <h3>Ownership and schedule</h3>
             <div className={styles.grid}>
-              <label><span>Team</span><select value={form.team} onChange={(event) => setForm((current) => ({ ...current, team: event.target.value }))}>{TEAMS.map((value) => <option key={value}>{value}</option>)}</select></label>
+              <label><span>Team</span><select required value={form.team} onChange={(event) => setForm((current) => ({ ...current, team: event.target.value }))}>{teams.map((value) => <option key={value}>{value}</option>)}</select></label>
               <label><span>Accountable owner</span><select value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}>{people.map((value) => <option key={value}>{value}</option>)}</select></label>
               <label><span>Start date</span><input type="date" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} /></label>
               <label><span>Due date</span><input type="date" value={form.due} onChange={(event) => setForm((current) => ({ ...current, due: event.target.value }))} /></label>

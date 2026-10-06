@@ -1,0 +1,8 @@
+.control { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:11px; min-width:min(100%,360px); padding:12px 13px; border:1px solid #dce5e0; border-radius:11px; background:#f8fbf9; }
+.control > span { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; color:#27684f; background:#dff2e8; font-size:15px; }
+.control strong,.control small,.control em { display:block; }
+.control strong { color:#253a31; font-size:10px; }
+.control small { margin-top:3px; color:#74827b; font-size:8px; line-height:1.4; }
+.control em { margin-top:4px; color:#2d6a51; font-size:8px; font-style:normal; }
+.control button { min-height:32px; padding:0 10px; border:1px solid #bdd3c8; border-radius:8px; color:#255e47; background:white; font:inherit; font-size:9px; font-weight:800; cursor:pointer; }
+.control button:disabled { cursor:wait; opacity:.55; }

@@ -6,7 +6,6 @@ import SignOutButton from '../components/sign-out-button';
 import {
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
-  TEAMS,
   canAccessWorkItem,
   type ChecklistStatus,
   type CreateWorkItemInput,
@@ -89,14 +88,14 @@ function newChecklistStep(currentUserName: string): ChecklistDraft {
   return { id: createClientDraftId(), title: '', assignee: currentUserName, due: '' };
 }
 
-function createEmptyDraft(currentUserName: string, now = new Date()): MobileDraft {
+function createEmptyDraft(currentUserName: string, defaultTeam: string, now = new Date()): MobileDraft {
   const dates = defaultWorkDates(now);
   return {
     title: '',
     type: 'Task',
     purpose: '',
     expectedResult: '',
-    team: 'Propulsion',
+    team: defaultTeam,
     owner: currentUserName,
     priority: 'High',
     ...dates,
@@ -106,8 +105,8 @@ function createEmptyDraft(currentUserName: string, now = new Date()): MobileDraf
   };
 }
 
-function hydrateMobileDraft(value: unknown, currentUserName: string) {
-  const fallback = createEmptyDraft(currentUserName, new Date());
+function hydrateMobileDraft(value: unknown, currentUserName: string, defaultTeam: string) {
+  const fallback = createEmptyDraft(currentUserName, defaultTeam, new Date());
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   const saved = value as Partial<MobileDraft>;
   const checklist = Array.isArray(saved.checklist)
@@ -143,10 +142,12 @@ function progressCopy(item: WorkItem) {
 export default function MobileWorkspace({
   currentUserName,
   activeUserNames,
+  teamNames,
   canManage,
 }: {
   currentUserName: string;
   activeUserNames: string[];
+  teamNames: string[];
   canManage: boolean;
 }) {
   const [items, setItems] = useState<WorkItem[]>([]);
@@ -155,7 +156,7 @@ export default function MobileWorkspace({
   const [view, setView] = useState<HomeView>('home');
   const [creating, setCreating] = useState(false);
   const [step, setStep] = useState(1);
-  const [draft, setDraft] = useState<MobileDraft>(() => createEmptyDraft(currentUserName));
+  const [draft, setDraft] = useState<MobileDraft>(() => createEmptyDraft(currentUserName, teamNames[0] ?? ''));
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [createdItem, setCreatedItem] = useState<WorkItem | null>(null);
@@ -212,15 +213,15 @@ export default function MobileWorkspace({
       try {
         const savedDraft = window.localStorage.getItem(DRAFT_KEY);
         setDraft(savedDraft
-          ? hydrateMobileDraft(JSON.parse(savedDraft) as unknown, currentUserName)
-          : createEmptyDraft(currentUserName, new Date()));
+          ? hydrateMobileDraft(JSON.parse(savedDraft) as unknown, currentUserName, teamNames[0] ?? '')
+          : createEmptyDraft(currentUserName, teamNames[0] ?? '', new Date()));
       } catch {
         window.localStorage.removeItem(DRAFT_KEY);
       }
       draftHydrated.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [currentUserName]);
+  }, [currentUserName, teamNames]);
 
   useEffect(() => {
     if (!draftHydrated.current) return;
@@ -382,7 +383,7 @@ export default function MobileWorkspace({
   }, [openAssignedActions, ownedWork, today]);
 
   function startCreate() {
-    if (!hasDraftContent(draft)) setDraft(createEmptyDraft(currentUserName, new Date()));
+    if (!hasDraftContent(draft)) setDraft(createEmptyDraft(currentUserName, teamNames[0] ?? '', new Date()));
     setView('home');
     setStep(1);
     setCreatedItem(null);
@@ -526,7 +527,7 @@ export default function MobileWorkspace({
       setItems((current) => isRelevantItem(item) ? [item, ...current] : current);
       setCreatedItem(item);
       window.localStorage.removeItem(DRAFT_KEY);
-      setDraft(createEmptyDraft(currentUserName, new Date()));
+      setDraft(createEmptyDraft(currentUserName, teamNames[0] ?? '', new Date()));
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -608,7 +609,7 @@ export default function MobileWorkspace({
 
               <div className={styles.formBody}>
                 {step === 1 ? <OutcomeStep draft={draft} updateDraft={updateDraft} /> : null}
-                {step === 2 ? <OwnershipStep draft={draft} updateDraft={updateDraft} people={people} /> : null}
+                {step === 2 ? <OwnershipStep draft={draft} updateDraft={updateDraft} people={people} teamNames={teamNames} /> : null}
                 {step === 3 ? (
                   <ActionsStep draft={draft} updateDraft={updateDraft} updateAction={updateAction} people={people} currentUserName={currentUserName} />
                 ) : null}
@@ -823,6 +824,7 @@ export default function MobileWorkspace({
         key={selectedItem?.id ?? 'closed'}
         item={selectedItem}
         people={people}
+        teams={teamNames}
         onClose={closeDetail}
         onUpdate={saveMobileUpdate}
         onEdit={saveMobileEdit}
@@ -863,7 +865,7 @@ function WorkList({ items, loading, error, title, suffix, onOpen }: { items: Wor
               }
             }}
           >
-            <div className={styles.cardMeta}><span>{item.id}{item.archivedAt ? ' · Archived' : ''}</span><b className={styles[item.status]}>{STATUS_LABELS[item.status]}</b></div>
+            <div className={styles.cardMeta}><span>{item.id}{item.archivedAt ? ' · Archived' : ''}{item.needsAttention ? ' · Needs attention' : ''}</span><b className={styles[item.status]}>{STATUS_LABELS[item.status]}</b></div>
             <h3>{item.title}</h3>
             {item.health === 'blocked' ? <p className={styles.blockedCopy}>Blocked · {progressCopy(item)}</p> : null}
             <div className={styles.progress}><i style={{ width: `${item.progress}%` }} /></div>
@@ -900,13 +902,13 @@ function OutcomeStep({ draft, updateDraft }: StepProps) {
   );
 }
 
-function OwnershipStep({ draft, updateDraft, people }: StepProps & { people: string[] }) {
+function OwnershipStep({ draft, updateDraft, people, teamNames }: StepProps & { people: string[]; teamNames: string[] }) {
   return (
     <section className={styles.formStep}>
       <p className={styles.kicker}>Accountability</p><h1>Who owns the result, and when is it needed?</h1>
       <p className={styles.stepIntro}>The owner remains accountable even when actions are assigned to others.</p>
       <div className={styles.twoFields}>
-        <label><span>Engineering team</span><select value={draft.team} onChange={(event) => updateDraft('team', event.target.value)}>{TEAMS.map((team) => <option key={team}>{team}</option>)}</select></label>
+        <label><span>Engineering team</span><select value={draft.team} onChange={(event) => updateDraft('team', event.target.value)}>{Array.from(new Set([draft.team, ...teamNames])).filter(Boolean).map((team) => <option key={team}>{team}</option>)}</select></label>
         <label><span>Priority</span><select value={draft.priority} onChange={(event) => updateDraft('priority', event.target.value as WorkPriority)}>{(['Critical', 'High', 'Medium'] as WorkPriority[]).map((priority) => <option key={priority}>{priority}</option>)}</select></label>
       </div>
       <label><span>Accountable owner</span><select value={draft.owner} onChange={(event) => updateDraft('owner', event.target.value)}>{people.map((engineer) => <option key={engineer}>{engineer}</option>)}</select><small>One person owns the integrated result.</small></label>

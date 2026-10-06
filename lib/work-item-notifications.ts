@@ -2,7 +2,7 @@ import { pushSubscriptions } from '../db/push-subscriptions';
 import type { WorkItemActor } from '../db/work-items';
 import type { WorkItem, WorkItemActivity } from './work-items';
 import { readVapidConfig } from './push-config';
-import { sendWebPush, type PushPayload } from './web-push';
+import { sendWebPush, type PushPayload, type StoredPushSubscription } from './web-push';
 
 export type WorkItemNotificationPlan = {
   recipients: string[];
@@ -29,6 +29,10 @@ function withoutActor(names: string[], actor: WorkItemActor) {
 
 function cardUrl(item: WorkItem) {
   return `/mobile?workItem=${encodeURIComponent(item.id)}`;
+}
+
+function managementCardUrl(item: WorkItem) {
+  return `/management?workItem=${encodeURIComponent(item.id)}`;
 }
 
 export function planCreatedNotifications(item: WorkItem, actor: WorkItemActor) {
@@ -146,25 +150,35 @@ function commentPlan(
   }] : [];
 }
 
-async function deliver(plans: WorkItemNotificationPlan[]) {
-  if (!plans.length) return;
+async function deliver(
+  plans: WorkItemNotificationPlan[],
+  adminPayload: PushPayload,
+) {
   try {
     const config = readVapidConfig();
+    const deliveries = new Map<string, { subscription: StoredPushSubscription; payload: PushPayload }>();
+    const adminSubscriptions = await pushSubscriptions.listForRole('admin');
+    for (const subscription of adminSubscriptions) {
+      deliveries.set(subscription.id, { subscription, payload: adminPayload });
+    }
     for (const plan of plans) {
       const subscriptions = await pushSubscriptions.listForNames(plan.recipients);
-      await Promise.all(subscriptions.map(async (subscription) => {
-        try {
-          const response = await sendWebPush(subscription, plan.payload, config);
-          if (response.status === 404 || response.status === 410) {
-            await pushSubscriptions.removeById(subscription.id);
-          } else if (!response.ok) {
-            console.error(`Push service rejected a notification with status ${response.status}.`);
-          }
-        } catch (error) {
-          console.error('Unable to deliver a push notification', error);
-        }
-      }));
+      for (const subscription of subscriptions) {
+        deliveries.set(subscription.id, { subscription, payload: plan.payload });
+      }
     }
+    await Promise.all([...deliveries.values()].map(async ({ subscription, payload }) => {
+      try {
+        const response = await sendWebPush(subscription, payload, config);
+        if (response.status === 404 || response.status === 410) {
+          await pushSubscriptions.removeById(subscription.id);
+        } else if (!response.ok) {
+          console.error(`Push service rejected a notification with status ${response.status}.`);
+        }
+      } catch (error) {
+        console.error('Unable to deliver a push notification', error);
+      }
+    }));
   } catch (error) {
     // Work mutations must succeed even if push configuration or a provider is unavailable.
     console.error('Push notification dispatch was skipped', error);
@@ -172,8 +186,30 @@ async function deliver(plans: WorkItemNotificationPlan[]) {
 }
 
 export const workItemNotifier: WorkItemNotifier = {
-  created: (item, actor) => deliver(planCreatedNotifications(item, actor)),
-  updated: (before, after, actor) => deliver(planUpdatedNotifications(before, after, actor)),
-  activity: (item, actor) => deliver(activityPlan(item, actor)),
-  comment: (item, activity, actor) => deliver(commentPlan(item, activity, actor)),
+  created: (item, actor) => deliver(planCreatedNotifications(item, actor), {
+    title: `New work card · ${item.id}`,
+    body: `${actor.name} created ${item.title}`,
+    tag: `card-created:${item.id}`,
+    url: managementCardUrl(item),
+  }),
+  updated: (before, after, actor) => deliver(planUpdatedNotifications(before, after, actor), {
+    title: `Activity on ${after.id}`,
+    body: `${actor.name} updated ${after.title}`,
+    tag: `activity:${after.id}`,
+    url: managementCardUrl(after),
+  }),
+  activity: (item, actor) => deliver(activityPlan(item, actor), {
+    title: `Activity on ${item.id}`,
+    body: `${actor.name} updated ${item.title}`,
+    tag: `activity:${item.id}`,
+    url: managementCardUrl(item),
+  }),
+  comment: (item, activity, actor) => deliver(commentPlan(item, activity, actor), {
+    title: `New comment on ${item.id}`,
+    body: activity.checklistTitle
+      ? `${actor.name} commented on “${activity.checklistTitle}”`
+      : `${actor.name} commented on ${item.title}`,
+    tag: `comment:${item.id}`,
+    url: managementCardUrl(item),
+  }),
 };

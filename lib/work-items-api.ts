@@ -5,7 +5,6 @@ import type {
   WorkItemPatch,
 } from './work-items';
 import {
-  TEAMS,
   canAccessWorkItem,
   isChecklistStatus,
   isWorkHealth,
@@ -213,7 +212,7 @@ export function validateCreateWorkItem(value: unknown) {
   const checklist = validateChecklistInput(input.checklist, false);
   if (
     !requiredText(input.title, 500)
-    || !oneOf(input.team, TEAMS)
+    || !requiredText(input.team, 80)
     || !requiredText(input.owner, 200)
     || (input.status !== 'captured' && input.status !== 'ready')
     || !oneOf(input.priority, priorities)
@@ -261,7 +260,7 @@ export function validateWorkItemEdit(value: unknown) {
     !isWorkItemId(input.id)
     || !requiredText(input.title, 500)
     || !oneOf(input.type, workTypes)
-    || !oneOf(input.team, TEAMS)
+    || !requiredText(input.team, 80)
     || !requiredText(input.owner, 200)
     || !oneOf(input.priority, priorities)
     || !requiredText(input.purpose, 4000)
@@ -337,6 +336,13 @@ export function validateWorkItemPatch(value: unknown) {
       return { error: 'Blocker must be text or null.' } as const;
     }
     patch.blocker = input.blocker as string | null;
+    changes += 1;
+  }
+  if (own(input, 'needsAttention')) {
+    if (typeof input.needsAttention !== 'boolean') {
+      return { error: 'Attention state must be true or false.' } as const;
+    }
+    patch.needsAttention = input.needsAttention;
     changes += 1;
   }
   if (own(input, 'checklistStep')) {

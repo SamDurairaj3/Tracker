@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { listActiveUserNames } from '../../db/auth-users';
+import { listActiveTeamNames } from '../../db/team-settings';
 import { requireIdentity } from '../../lib/auth-session';
 import MobileWorkspace from './mobile-workspace';
 
@@ -21,6 +22,9 @@ export const viewport: Viewport = {
 
 export default async function MobilePage() {
   const identity = await requireIdentity('/mobile');
-  const activeUserNames = await listActiveUserNames();
-  return <MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} canManage={identity.role === 'admin'} />;
+  const [activeUserNames, teamNames] = await Promise.all([
+    listActiveUserNames(),
+    listActiveTeamNames(),
+  ]);
+  return <MobileWorkspace currentUserName={identity.name} activeUserNames={activeUserNames} teamNames={teamNames} canManage={identity.role === 'admin'} />;
 }

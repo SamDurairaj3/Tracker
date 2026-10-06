@@ -7,7 +7,6 @@ import {
   CHECKLIST_STATUSES,
   PROGRESS_METHOD_LABELS,
   STATUS_LABELS,
-  TEAMS,
   WORK_STATUSES,
   filterWorkItemActivity,
   type ChecklistStep,
@@ -53,6 +52,7 @@ const activityLabels: Record<WorkItemActivity['type'], string> = {
 type Props = {
   item: WorkItem | null;
   people: string[];
+  teams: string[];
   onClose: () => void;
   onUpdate: (patch: WorkItemPatch) => Promise<WorkItem>;
   onEdit: (input: WorkItemEditInput) => Promise<WorkItem>;
@@ -94,6 +94,7 @@ function editDraft(item: WorkItem): WorkItemEditInput {
 export default function WorkItemDetail({
   item,
   people,
+  teams,
   onClose,
   onUpdate,
   onEdit,
@@ -159,6 +160,7 @@ export default function WorkItemDetail({
     ...item.checklist.map((step) => step.assignee),
     ...people,
   ])).filter(Boolean);
+  const teamOptions = Array.from(new Set([item.team, ...teams])).filter(Boolean);
 
   async function loadActivity() {
     try {
@@ -299,6 +301,7 @@ export default function WorkItemDetail({
             <span className={styles[item.status]}>{STATUS_LABELS[item.status]}</span>
             <span className={styles[item.health]}>{healthLabels[item.health]}</span>
             <span>{item.priority} priority</span>
+            {item.needsAttention ? <span className={styles.attentionBadge}>Needs attention</span> : null}
             {item.archivedAt ? <span className={styles.archiveBadge}>Archived</span> : null}
           </div>
 
@@ -382,7 +385,7 @@ export default function WorkItemDetail({
                 <label>
                   <span>Team</span>
                   <select value={draft.team} onChange={(event) => setDraft({ ...draft, team: event.target.value })}>
-                    {TEAMS.map((team) => <option key={team}>{team}</option>)}
+                    {teamOptions.map((team) => <option key={team}>{team}</option>)}
                   </select>
                 </label>
                 <label>
@@ -507,6 +510,23 @@ export default function WorkItemDetail({
                     ))}
                   </select>
                   <small>{savingKey === 'status' ? 'Saving status…' : 'Changes save immediately.'}</small>
+                </label>
+              ) : null}
+
+              {canUpdateStatus && !item.archivedAt ? (
+                <label className={styles.attentionControl}>
+                  <span><strong>Needs attention</strong><small>Flag this card for management follow-up.</small></span>
+                  <input
+                    type="checkbox"
+                    checked={item.needsAttention}
+                    disabled={Boolean(savingKey)}
+                    onChange={(event) => void save(
+                      { id: item.id, needsAttention: event.target.checked },
+                      'attention',
+                    )}
+                  />
+                  <i aria-hidden="true" />
+                  <em>{savingKey === 'attention' ? 'Saving…' : item.needsAttention ? 'Flagged' : 'Normal'}</em>
                 </label>
               ) : null}
 

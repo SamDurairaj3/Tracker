@@ -85,6 +85,7 @@
 .badges .at-risk { color: #83591b; background: #faedce; }
 .badges .blocked { color: #9b4435; background: #fae5df; }
 .badges .done { color: #40554b; background: #e1e9e5; }
+.badges .attentionBadge { color: #9b4d28; background: #fff0e4; }
 
 .statusControl {
   display: grid;
@@ -110,6 +111,18 @@
   font-size: 0.84rem;
 }
 .statusControl small { grid-column: 1 / -1; color: #71847b; font-size: 0.72rem; }
+
+.attentionControl { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:.75rem; margin:0 0 .8rem; padding:.8rem .9rem; border:1px solid #e3d7cc; border-radius:.7rem; background:#fffaf6; cursor:pointer; }
+.attentionControl > span strong,.attentionControl > span small { display:block; }
+.attentionControl > span strong { font-size:.8rem; }
+.attentionControl > span small { margin-top:.2rem; color:#7b7068; font-size:.68rem; }
+.attentionControl input { position:absolute; opacity:0; pointer-events:none; }
+.attentionControl > i { width:2.2rem; height:1.25rem; position:relative; border-radius:99px; background:#d8ddd9; transition:160ms ease; }
+.attentionControl > i::after { content:''; width:.95rem; height:.95rem; position:absolute; top:.15rem; left:.15rem; border-radius:50%; background:white; box-shadow:0 1px 4px rgb(0 0 0 / 18%); transition:160ms ease; }
+.attentionControl input:checked + i { background:#ce7040; }
+.attentionControl input:checked + i::after { transform:translateX(.95rem); }
+.attentionControl input:focus-visible + i { outline:3px solid rgb(206 112 64 / 24%); outline-offset:2px; }
+.attentionControl em { min-width:3rem; color:#8b5a3d; font-size:.65rem; font-style:normal; font-weight:800; text-align:right; }
 
 .error {
   margin: 0.8rem 0 0;

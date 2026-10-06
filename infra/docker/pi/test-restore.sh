@@ -107,8 +107,8 @@ compose exec -T postgres pg_restore \
   "$container_archive"
 
 required_count=$(compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name IN ('tracker_schema_migrations', 'work_items', 'checklist_steps', 'work_item_counters', 'work_item_activity', 'push_subscriptions');")
-[ "$required_count" = 6 ] || fail 'one or more required Tracker tables are missing'
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name IN ('tracker_schema_migrations', 'work_items', 'checklist_steps', 'work_item_counters', 'work_item_activity', 'push_subscriptions', 'work_item_teams');")
+[ "$required_count" = 7 ] || fail 'one or more required Tracker tables are missing'
 
 echo 'Restored row counts:'
 compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
@@ -117,7 +117,8 @@ compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERR
    UNION ALL SELECT 'checklist_steps=' || count(*) FROM checklist_steps
    UNION ALL SELECT 'work_item_counters=' || count(*) FROM work_item_counters
    UNION ALL SELECT 'work_item_activity=' || count(*) FROM work_item_activity
-   UNION ALL SELECT 'push_subscriptions=' || count(*) FROM push_subscriptions;"
+   UNION ALL SELECT 'push_subscriptions=' || count(*) FROM push_subscriptions
+   UNION ALL SELECT 'work_item_teams=' || count(*) FROM work_item_teams;"
 
 orphan_count=$(compose exec -T postgres psql -X -U tracker -d "$restore_database" -At -v ON_ERROR_STOP=1 -c \
   "SELECT count(*) FROM checklist_steps AS step LEFT JOIN work_items AS item ON item.id = step.work_item_id WHERE item.id IS NULL;")

@@ -47,6 +47,7 @@ function stubItem(createdBy: string): WorkItem {
     linkedGoal: null,
     progressMethod: 'checklist-count',
     blocker: null,
+    needsAttention: false,
     createdAt: '2026-09-19T00:00:00.000Z',
     updatedAt: '2026-09-19T00:00:00.000Z',
     archivedAt: null,
@@ -135,12 +136,12 @@ test('work-item creation always uses the authenticated display name', async () =
 test('auth migration is explicit and creates every Better Auth table', async () => {
   const { db, close } = memoryPostgres();
   try {
-    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql', '0005_push_subscriptions.sql']);
+    assert.deepEqual(await migrate(db), ['0001_work_items.sql', '0002_better_auth.sql', '0003_work_item_lifecycle.sql', '0004_checklist_due_dates.sql', '0005_push_subscriptions.sql', '0006_management_controls.sql']);
     const { rows } = await db.query<{ name: string | null }>(`
       SELECT to_regclass(name)::text AS name
       FROM unnest(ARRAY[
         'auth_users', 'auth_sessions', 'auth_accounts',
-        'auth_verifications', 'auth_rate_limits', 'push_subscriptions'
+        'auth_verifications', 'auth_rate_limits', 'push_subscriptions', 'work_item_teams'
       ]) AS name
     `);
     assert.deepEqual(rows.map((row) => row.name).sort(), [
@@ -150,6 +151,7 @@ test('auth migration is explicit and creates every Better Auth table', async () 
       'auth_users',
       'auth_verifications',
       'push_subscriptions',
+      'work_item_teams',
     ]);
   } finally {
     await close();

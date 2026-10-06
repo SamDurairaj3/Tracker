@@ -106,7 +106,9 @@ the checksummed SQL migrations, and starts the web app. Do not add `--no-cache`
 for a normal update. Migration `0002_better_auth.sql` creates the Better Auth
 user, account, session, verification, admin-role, and database rate-limit
 schema. Migration `0005_push_subscriptions.sql` adds per-user Web Push device
-subscriptions. Runtime requests validate the schema but never mutate it. A healthy
+subscriptions. Migration `0006_management_controls.sql` adds explicit card
+attention flags and the administrator-managed engineering-team list. Runtime
+requests validate the schema but never mutate it. A healthy
 response is `{"status":"ok"}` and contains no database details.
 
 The first build needs internet access for images and packages and can take
@@ -197,11 +199,15 @@ assignment filters use the signed-in display name. Login, session, protected
 HTML, and work-item API responses use `no-store` headers.
 
 Administrators can create and assign complete work cards from `/management`.
+They can also review organization-wide activity and enable browser alerts there.
+`/management/settings` manages the team dropdown without a code deployment;
+renames update existing card references, while disabling preserves history.
 On `/mobile`, each user can open Notifications and select **Enable push
 notifications**. Browser permission is requested only after that user action.
 The server sends encrypted alerts for card creation, new checklist assignment,
-comments, and other card activity to the relevant owner and assignees, excluding
-the person who made the change. A notification opens the corresponding card.
+comments, and other card activity to the relevant owner and assignees. Every
+active administrator subscription also receives each alert. A notification
+opens the corresponding card.
 
 ## 7. Optional Cloudflare Quick Tunnel review
 
