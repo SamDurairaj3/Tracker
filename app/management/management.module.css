@@ -219,11 +219,15 @@
 .secondaryButton,
 .primaryButton {
   min-height: 39px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 14px;
   border-radius: 9px;
   cursor: pointer;
   font-size: 11px;
   font-weight: 750;
+  text-decoration: none;
 }
 
 .secondaryButton {

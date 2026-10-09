@@ -61,6 +61,7 @@ See [the PostgreSQL setup and cutover guide](docs/architecture/postgresql.md) fo
 | `/management` | Administrators | Create and assign work cards; review notifications, attention flags, Kanban, and Gantt views |
 | `/management/users` | Administrators | Create, edit, disable, re-enable, and reset invited accounts |
 | `/management/settings` | Administrators | Add, rename, disable, and remove work-card dropdown options such as engineering teams |
+| `/management/weekly-review` | Administrators | Review a selectable week of engineering activity with engineer, team, priority, and activity filters |
 | `/engineering` | Invited administrators and engineers | Create owned work, update its workflow, and complete assigned actions |
 | `/mobile` | Invited administrators and engineers on phones | Installable companion for creating work cards, owned work, and assigned actions |
 

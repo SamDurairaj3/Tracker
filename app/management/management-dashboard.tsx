@@ -230,6 +230,9 @@ export default function ManagementDashboard({
           </Link>
 
           <span className={styles.navLabel}>Views</span>
+          <Link href="/management/weekly-review">
+            <span aria-hidden="true">◫</span> Weekly review
+          </Link>
           <a href="#board">
             <span aria-hidden="true">▥</span> Kanban
           </a>
@@ -258,9 +261,9 @@ export default function ManagementDashboard({
             <h1>Engineering delivery</h1>
           </div>
           <div className={styles.headerActions}>
-            <button className={styles.secondaryButton} type="button">
+            <Link className={styles.secondaryButton} href="/management/weekly-review">
               Weekly integration review
-            </button>
+            </Link>
             <button className={styles.primaryButton} type="button" onClick={() => setShowCreate(true)}>
               Create work card <span aria-hidden="true">＋</span>
             </button>
